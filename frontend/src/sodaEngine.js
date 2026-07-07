@@ -20,7 +20,7 @@ async function fetchJson(url, options) {
   return { status: res.status, ok: res.ok, data, headers: res.headers };
 }
 
-function createPaymentPayload(productId, sessionId, acceptOption) {
+function createPaymentPayload(productId, sessionId, acceptOption, signerAddress, signature) {
   return {
     scheme: acceptOption.scheme,
     price: acceptOption.price,
@@ -28,6 +28,8 @@ function createPaymentPayload(productId, sessionId, acceptOption) {
     payTo: acceptOption.payTo,
     paymentId: `pay_${productId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     sessionId,
+    ...(signerAddress ? { signerAddress } : {}),
+    ...(signature ? { signature } : {}),
   };
 }
 
@@ -63,14 +65,14 @@ export const x402Client = {
     };
   },
 
-  async payForResource(productId, sessionId) {
+  async payForResource(productId, sessionId, metamaskSignature, metamaskAddress) {
     const access = await this.accessResource(productId);
     if (access.status !== "payment_required") {
       return access;
     }
 
     const acceptOption = access.paymentRequired.accepts[0];
-    const payload = createPaymentPayload(productId, sessionId, acceptOption);
+    const payload = createPaymentPayload(productId, sessionId, acceptOption, metamaskAddress, metamaskSignature);
 
     let res;
     try {
@@ -123,16 +125,44 @@ export const x402Client = {
     const { data } = await fetchJson(`${X402_BASE}/merchants`);
     return data.merchants || [];
   },
+
+  async getMerchant(merchantId) {
+    const { data } = await fetchJson(`${X402_BASE}/merchant/${merchantId}`);
+    return data;
+  },
 };
 
 export async function discoverProducts(query = "all") {
   try {
-    const res = await fetch(`${MCP_BASE}/discover?query=${encodeURIComponent(query)}`);
-    if (!res.ok) return { products: [], total: 0 };
-    const data = await res.json();
+    const toolsRes = await fetch(`${MCP_BASE}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    if (!toolsRes.ok) return { products: [], total: 0 };
+    const toolsData = await toolsRes.json();
+    const tools = toolsData.result?.tools || [];
+
+    const discoveryTool = tools.find(t => t.name === "product_discovery");
+    if (!discoveryTool) return { products: [], total: 0 };
+
+    const callRes = await fetch(`${MCP_BASE}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0", id: 2, method: "tools/call",
+        params: { name: "product_discovery", arguments: { query } },
+      }),
+    });
+    if (!callRes.ok) return { products: [], total: 0 };
+    const callData = await callRes.json();
+    const content = callData.result?.content?.[0]?.text;
+    if (!content) return { products: [], total: 0 };
+
+    const parsed = JSON.parse(content);
     return {
-      products: data.products || [],
-      total: data.total || 0,
+      products: parsed.products || [],
+      total: parsed.total || 0,
     };
   } catch (e) {
     console.error("MCP discovery failed:", e.message);
@@ -184,7 +214,12 @@ function detectIntent(message, context) {
     { keyword: "pepsi", matched: ["pepsi"] },
     { keyword: "sprite", matched: ["sprite"] },
     { keyword: "fanta", matched: ["fanta", "orange"] },
-    { keyword: "dasani", matched: ["dasani", "water", "dasanii"] },
+    { keyword: "dasani", matched: ["dasani", "water"] },
+    { keyword: "espresso", matched: ["espresso", "expresso"] },
+    { keyword: "latte", matched: ["latte"] },
+    { keyword: "cappuccino", matched: ["cappuccino", "capuccino"] },
+    { keyword: "cold-brew", matched: ["cold brew", "coldbrew", "iced coffee"] },
+    { keyword: "smartwater", matched: ["smartwater", "smart water"] },
   ];
 
   for (const entry of ALL_KEYWORDS) {

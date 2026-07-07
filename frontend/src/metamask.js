@@ -63,7 +63,22 @@ export function registerMetaMaskCallbacks({ onAccountsChanged, onChainChanged })
   };
 }
 
-function getChainName(chainIdHex) {
+export async function signMessage(message) {
+  if (!isMetaMaskInstalled()) {
+    throw new Error("MetaMask is not installed");
+  }
+  const accounts = await window.ethereum.request({ method: "eth_accounts" });
+  if (!accounts || accounts.length === 0) {
+    throw new Error("No connected MetaMask account");
+  }
+  const signature = await window.ethereum.request({
+    method: "personal_sign",
+    params: [message, accounts[0]],
+  });
+  return { signer: accounts[0], signature };
+}
+
+export function getChainName(chainIdHex) {
   const chains = {
     "0x1": "Ethereum Mainnet",
     "0x5": "Goerli Testnet",

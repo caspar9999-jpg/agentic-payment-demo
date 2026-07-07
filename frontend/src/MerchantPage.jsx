@@ -1,0 +1,221 @@
+import { useState, useEffect } from "react";
+import { Link, useParams } from "react-router-dom";
+import { x402Client } from "./sodaEngine.js";
+
+function MerchantDirectory() {
+  const [merchants, setMerchants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const fetchMerchants = async () => {
+    try {
+      const data = await x402Client.getMerchantBalances();
+      setMerchants(data || []);
+      setLastUpdated(new Date());
+    } catch (e) {
+      console.error("Failed to fetch merchants:", e.message);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchMerchants();
+    const interval = setInterval(fetchMerchants, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const totalRevenue = merchants.reduce((sum, m) => sum + (m.balance || 0), 0);
+  const totalProducts = merchants.reduce((sum, m) => sum + (m.totalProducts || 0), 0);
+
+  return (
+    <>
+      <header className="merchant-page-header">
+        <Link to="/" className="merchant-back-link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Back to Chat
+        </Link>
+        <div className="merchant-page-title-block">
+          <h1 className="merchant-page-title">MCP Marketplace</h1>
+          <p className="merchant-page-subtitle">Browse merchants and their products — auto-refreshes every 5s</p>
+        </div>
+        <div className="merchant-page-summary">
+          <div className="merchant-summary-card">
+            <span className="merchant-summary-label">Total Revenue</span>
+            <span className="merchant-summary-value revenue">${(totalRevenue / 100).toFixed(2)}</span>
+          </div>
+          <div className="merchant-summary-card">
+            <span className="merchant-summary-label">Merchants</span>
+            <span className="merchant-summary-value">{merchants.length}</span>
+          </div>
+          <div className="merchant-summary-card">
+            <span className="merchant-summary-label">Products</span>
+            <span className="merchant-summary-value">{totalProducts}</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="merchant-page-body">
+        {loading && <p className="merchant-loading">Loading merchants...</p>}
+
+        {!loading && merchants.length === 0 && (
+          <div className="merchant-empty-state">
+            <p className="merchant-empty-text">No merchants registered yet.</p>
+            <p className="merchant-empty-hint">Make a purchase to see merchant data.</p>
+            <Link to="/" className="merchant-empty-link">← Back to Chat</Link>
+          </div>
+        )}
+
+        {!loading && merchants.length > 0 && (
+          <div className="merchant-grid">
+            {merchants.map(m => (
+              <Link to={`/merchant/${m.wallet}`} key={m.wallet} className="merchant-card">
+                <div className="merchant-card-header">
+                  <h2 className="merchant-card-name">Merchant</h2>
+                  <span className="merchant-card-balance">{m.balanceUSD}</span>
+                </div>
+                <div className="merchant-card-body">
+                  <div className="merchant-card-products">
+                    {m.products?.slice(0, 4).map(p => (
+                      <span key={p.productId} className="merchant-card-product-tag">{p.name}</span>
+                    ))}
+                    {(m.totalProducts || 0) > 4 && (
+                      <span className="merchant-card-product-tag more">+{m.totalProducts - 4} more</span>
+                    )}
+                  </div>
+                  <div className="merchant-card-wallet">
+                    <code>{m.wallet.slice(0, 10)}…{m.wallet.slice(-6)}</code>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {lastUpdated && (
+          <p className="merchant-last-updated">Last updated: {lastUpdated.toLocaleTimeString()}</p>
+        )}
+      </main>
+    </>
+  );
+}
+
+function MerchantDetail() {
+  const { merchantId } = useParams();
+  const [merchant, setMerchant] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const fetchMerchant = async () => {
+    try {
+      const data = await x402Client.getMerchant(merchantId);
+      setMerchant(data);
+      setLastUpdated(new Date());
+    } catch (e) {
+      console.error("Failed to fetch merchant:", e.message);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchMerchant();
+    const interval = setInterval(fetchMerchant, 5000);
+    return () => clearInterval(interval);
+  }, [merchantId]);
+
+  return (
+    <>
+      <header className="merchant-page-header">
+        <Link to="/merchant" className="merchant-back-link">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          All Merchants
+        </Link>
+        <div className="merchant-page-title-block">
+          {merchant && (
+            <>
+              <h1 className="merchant-page-title">Merchant Wallet</h1>
+              <p className="merchant-page-subtitle">
+                <code className="merchant-detail-wallet">{merchant.wallet}</code>
+              </p>
+            </>
+          )}
+        </div>
+        {merchant && (
+          <div className="merchant-page-summary">
+            <div className="merchant-summary-card">
+              <span className="merchant-summary-label">Balance</span>
+              <span className="merchant-summary-value revenue">{merchant.balanceUSD}</span>
+            </div>
+            <div className="merchant-summary-card">
+              <span className="merchant-summary-label">Products</span>
+              <span className="merchant-summary-value">{merchant.totalProducts}</span>
+            </div>
+            <div className="merchant-summary-card">
+              <span className="merchant-summary-label">Network</span>
+              <span className="merchant-summary-value network">{merchant.network}</span>
+            </div>
+          </div>
+        )}
+      </header>
+
+      <main className="merchant-page-body">
+        {loading && <p className="merchant-loading">Loading merchant data...</p>}
+
+        {!loading && !merchant && (
+          <div className="merchant-empty-state">
+            <p className="merchant-empty-text">Merchant not found</p>
+            <Link to="/merchant" className="merchant-empty-link">← All Merchants</Link>
+          </div>
+        )}
+
+        {!loading && merchant && merchant.products?.length > 0 && (
+          <div className="merchant-table-container">
+            <table className="merchant-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Price</th>
+                  <th>Sales</th>
+                  <th>Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {merchant.products.map(p => (
+                  <tr key={p.productId}>
+                    <td className="merchant-cell-product">{p.name}</td>
+                    <td className="merchant-cell-price">{p.displayPrice}</td>
+                    <td className="merchant-cell-sales">{p.sales || 0}</td>
+                    <td className="merchant-cell-balance">{p.revenueUSD || "$0.00"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!loading && merchant && !merchant.products?.length && (
+          <div className="merchant-empty-state">
+            <p className="merchant-empty-text">No products registered for this merchant.</p>
+          </div>
+        )}
+
+        {lastUpdated && (
+          <p className="merchant-last-updated">Last updated: {lastUpdated.toLocaleTimeString()}</p>
+        )}
+      </main>
+    </>
+  );
+}
+
+export default function MerchantPage() {
+  const { merchantId } = useParams();
+  return (
+    <div className="merchant-page">
+      <div className="bg-gradient" />
+      {merchantId ? <MerchantDetail /> : <MerchantDirectory />}
+    </div>
+  );
+}

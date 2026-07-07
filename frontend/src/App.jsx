@@ -5,6 +5,7 @@ import {
   connectMetaMask,
   getConnectedAccounts,
   registerMetaMaskCallbacks,
+  signMessage,
 } from "./metamask.js";
 import "./App.css";
 
@@ -20,6 +21,7 @@ function TypingDots() {
 
 function MCPPanel({ mcpData, visible }) {
   if (!visible || !mcpData) return null;
+  const hasToolCall = mcpData.toolName && mcpData.toolStatus;
   return (
     <div className="mcp-panel">
       <div className="mcp-header">
@@ -32,27 +34,41 @@ function MCPPanel({ mcpData, visible }) {
         <span className="mcp-status active">active</span>
       </div>
       <div className="mcp-body">
-        {["source", "protocol"].map(f => (
-          <div key={f} className="mcp-row">
-            <span className="mcp-label">{f.charAt(0).toUpperCase() + f.slice(1)}</span>
-            <span className="mcp-value">{mcpData[f]}</span>
-          </div>
-        ))}
+        <div className="mcp-section-label">Agent → MCP Marketplace</div>
+        <div className="mcp-row">
+          <span className="mcp-label">tools/list</span>
+          <span className="mcp-value">{mcpData.toolsFound || 0} tools</span>
+        </div>
+        <div className="mcp-row">
+          <span className="mcp-label">Selected Tool</span>
+          <span className="mcp-value">{hasToolCall ? mcpData.toolName : "—"}</span>
+        </div>
+        {hasToolCall && (
+          <>
+            <div className="mcp-section-label">Agent → Tool Execution</div>
+            <div className="mcp-row">
+              <span className="mcp-label">{mcpData.toolName}</span>
+              <span className="mcp-value">{mcpData.toolStatus}</span>
+            </div>
+          </>
+        )}
+        <div className="mcp-section-label">Results</div>
         <div className="mcp-row">
           <span className="mcp-label">Products Found</span>
           <span className="mcp-value">{mcpData.productsDiscovered}</span>
         </div>
         <div className="mcp-row">
           <span className="mcp-label">Selected</span>
-          <span className="mcp-value">{mcpData.selectedProduct}</span>
+          <span className="mcp-value">{mcpData.selectedProduct || "—"}</span>
         </div>
         <div className="mcp-row">
           <span className="mcp-label">Payment</span>
-          <span className="mcp-value">{mcpData.paymentStatus}</span>
+          <span className="mcp-value">{mcpData.paymentStatus || "—"}</span>
         </div>
+        <div className="mcp-section-label">Protocol</div>
         <div className="mcp-row">
-          <span className="mcp-label">Intent</span>
-          <span className="mcp-value">{mcpData.intent}</span>
+          <span className="mcp-label">Transport</span>
+          <span className="mcp-value">HTTP + JSON-RPC</span>
         </div>
         <div className="mcp-row">
           <span className="mcp-label">Timestamp</span>
@@ -146,7 +162,7 @@ function WalletPanel({ walletInfo, onReset, purchasesCount }) {
   );
 }
 
-function PaymentCard({ product, walletInfo, sessionId, onPaid, onResetWallet }) {
+function PaymentCard({ product, walletInfo, sessionId, onPaid, onResetWallet, metamaskAccount }) {
   const [isPaying, setIsPaying] = useState(false);
   const [paid, setPaid] = useState(false);
   const [result, setResult] = useState(null);
@@ -158,7 +174,14 @@ function PaymentCard({ product, walletInfo, sessionId, onPaid, onResetWallet }) 
     setIsPaying(true);
     setError(null);
     try {
-      const res = await x402Client.payForResource(product.id, sessionId);
+      let signature, signerAddress;
+      if (metamaskAccount) {
+        const message = `x402 payment: Pay ${product.price} to ${product.payment?.payTo || product.payTo} for ${product.name}`;
+        const signed = await signMessage(message);
+        signature = signed.signature;
+        signerAddress = signed.signer;
+      }
+      const res = await x402Client.payForResource(product.id, sessionId, signature, signerAddress);
       if (res.status === "purchased") {
         setPaid(true);
         setResult(res);
@@ -227,12 +250,13 @@ function PaymentCard({ product, walletInfo, sessionId, onPaid, onResetWallet }) 
   const canAfford = walletInfo && walletInfo.balance >= (product.priceInCents || 99999);
 
   return (
-    <div className="payment-card">
-      <div className="payment-card-header">
-        <span className="payment-status-icon">🔒</span>
-        <span className="payment-status-text">HTTP 402 — Payment Required</span>
-        <span className="x402-badge">x402</span>
-      </div>
+      <div className="payment-card">
+        <div className="payment-card-header">
+          <span className="payment-status-icon">🔒</span>
+          <span className="payment-status-text">HTTP 402 — Payment Required</span>
+          <span className="x402-badge">x402</span>
+          {metamaskAccount && <span className="mm-badge">🦊</span>}
+        </div>
       <div className="payment-card-body">
         {!payment && <span className="demo-badge">🧪 Demo Mode</span>}
         <div className="payment-product-row">
@@ -263,7 +287,7 @@ function PaymentCard({ product, walletInfo, sessionId, onPaid, onResetWallet }) 
           ) : !canAfford ? (
             "Insufficient Balance"
           ) : (
-            `Pay ${product.price} via x402`
+            `Pay ${product.price}${metamaskAccount ? " with MetaMask" : " via x402"}`
           )}
         </button>
       </div>
@@ -271,7 +295,7 @@ function PaymentCard({ product, walletInfo, sessionId, onPaid, onResetWallet }) 
   );
 }
 
-function ChatMessage({ message, onConfirm, walletInfo, sessionId, onPaid, onResetWallet, onCatalogSelect }) {
+function ChatMessage({ message, onConfirm, walletInfo, sessionId, onPaid, onResetWallet, onCatalogSelect, metamaskAccount }) {
   const isUser = message.role === "user";
 
   return (
@@ -317,7 +341,8 @@ function ChatMessage({ message, onConfirm, walletInfo, sessionId, onPaid, onRese
 
         {!isUser && message.agentAction === "show_payment_card" && message.agentProduct && (
           <PaymentCard product={message.agentProduct} walletInfo={walletInfo} sessionId={sessionId}
-            onPaid={(result) => onPaid(message, result)} onResetWallet={onResetWallet} />
+            onPaid={(result) => onPaid(message, result)} onResetWallet={onResetWallet}
+            metamaskAccount={metamaskAccount} />
         )}
 
         <span className="message-time">
@@ -370,43 +395,6 @@ function InventoryPanel({ sessionId, visible }) {
   );
 }
 
-function MerchantPanel({ visible }) {
-  const [merchants, setMerchants] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!visible) return;
-    setLoading(true);
-    x402Client.getMerchantBalances().then(data => {
-      setMerchants(data || []);
-    }).catch(() => {}).finally(() => setLoading(false));
-  }, [visible]);
-
-  if (!visible) return null;
-
-  const totalRevenue = merchants.reduce((sum, m) => sum + (m.balance || 0), 0);
-
-  return (
-    <div className="merchant-panel">
-      <div className="merchant-header">
-        <span className="merchant-title">Merchant Revenue</span>
-        <span className="merchant-total">${(totalRevenue / 100).toFixed(2)}</span>
-      </div>
-      <div className="merchant-body">
-        {loading && <p className="merchant-loading">Loading...</p>}
-        {!loading && merchants.length === 0 && <p className="merchant-empty">No sales yet. Make a purchase to see merchant revenue.</p>}
-        {merchants.map(m => (
-          <div key={m.wallet} className="merchant-item">
-            <div className="merchant-item-name">{m.productName}</div>
-            <div className="merchant-item-balance">${(m.balance / 100).toFixed(2)}</div>
-            <div className="merchant-item-wallet" title={m.wallet}>{m.wallet.slice(0, 6)}…{m.wallet.slice(-4)}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -415,7 +403,6 @@ export default function App() {
   const [walletInfo, setWalletInfo] = useState(null);
   const [showMCP, setShowMCP] = useState(false);
   const [showInventory, setShowInventory] = useState(false);
-  const [showMerchant, setShowMerchant] = useState(false);
   const [latestMCP, setLatestMCP] = useState(null);
   const [metamaskAccount, setMetamaskAccount] = useState(null);
   const [isConnectingMetaMask, setIsConnectingMetaMask] = useState(false);
@@ -524,14 +511,20 @@ export default function App() {
         setAgentContext({});
       }
 
+      if (result.action === "show_payment_card" && result.product) {
+        try {
+          await x402Client.accessResource(result.product.id);
+        } catch (_) {}
+      }
+
       if (result.product?.payment) {
         setLatestMCP({
-          source: "MCP Discovery",
-          protocol: "Model Context Protocol + x402",
+          toolsFound: 1,
+          toolName: "product_discovery",
+          toolStatus: "completed",
           productsDiscovered: result.products?.length || 1,
           selectedProduct: result.product.id,
           paymentStatus: result.action === "show_payment_card" ? "ready" : "pending",
-          intent: result.action,
           timestamp: new Date().toISOString(),
         });
       }
@@ -550,8 +543,27 @@ export default function App() {
     setIsTyping(true);
 
     try {
-      const context = { lastAction: "confirm_gate", lastProduct: product };
-      const result = await processMessage(answer, context);
+      let result;
+      if (answer === "yes") {
+        const access = await x402Client.accessResource(product.id);
+        if (access.status === "payment_required") {
+          result = {
+            text: `HTTP 402 — Payment Required for ${product.name} (${product.price}). Click below to complete via x402.`,
+            action: "show_payment_card",
+            product,
+          };
+        } else {
+          result = {
+            text: `Sorry, there was an issue accessing ${product.name}: ${access.error || "unknown error"}`,
+            action: "show_catalog",
+            products: [],
+            product: null,
+          };
+        }
+      } else {
+        const context = { lastAction: "confirm_gate", lastProduct: product };
+        result = await processMessage(answer, context);
+      }
 
       if (result.action === "confirm_gate") {
         setAgentContext({ lastAction: "confirm_gate", lastProduct: result.product });
@@ -561,12 +573,12 @@ export default function App() {
 
       if (result.product?.payment) {
         setLatestMCP({
-          source: "MCP Discovery",
-          protocol: "Model Context Protocol + x402",
+          toolsFound: 1,
+          toolName: "product_discovery",
+          toolStatus: "completed",
           productsDiscovered: 1,
           selectedProduct: result.product.id,
           paymentStatus: result.action === "show_payment_card" ? "ready" : "pending",
-          intent: result.action,
           timestamp: new Date().toISOString(),
         });
       }
@@ -585,20 +597,31 @@ export default function App() {
 
     try {
       setAgentContext({});
-      const result = {
-        text: `Great! Let me set up the payment for ${product.name}. Click below to complete via x402.`,
-        action: "show_payment_card",
-        product,
-      };
+      const access = await x402Client.accessResource(product.id);
+      let result;
+      if (access.status === "payment_required") {
+        result = {
+          text: `HTTP 402 — Payment Required for ${product.name} (${product.price}). Click below to complete via x402.`,
+          action: "show_payment_card",
+          product,
+        };
+      } else {
+        result = {
+          text: `Sorry, there was an issue accessing ${product.name}: ${access.error || "unknown error"}`,
+          action: "show_catalog",
+          products: [],
+          product: null,
+        };
+      }
 
       if (product.payment) {
         setLatestMCP({
-          source: "MCP Discovery",
-          protocol: "Model Context Protocol + x402",
+          toolsFound: 1,
+          toolName: "product_discovery",
+          toolStatus: "completed",
           productsDiscovered: 1,
           selectedProduct: product.id,
           paymentStatus: "ready",
-          intent: "show_payment_card",
           timestamp: new Date().toISOString(),
         });
       }
@@ -662,11 +685,6 @@ export default function App() {
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
             </svg> Inventory
           </button>
-          <button className={`nav-item ${showMerchant ? "active" : ""}`} onClick={() => setShowMerchant(!showMerchant)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-            </svg> Merchants
-          </button>
         </div>
         <div className="sidebar-bottom">
           <MetaMaskPanel metamaskAccount={metamaskAccount} onConnect={handleMetaMaskConnect}
@@ -685,7 +703,7 @@ export default function App() {
             {messages.map((msg, i) => (
               <ChatMessage key={i} message={msg} onConfirm={handleConfirm} walletInfo={walletInfo}
                 sessionId={SESSION_ID} onPaid={handlePaid} onResetWallet={handleResetWallet}
-                onCatalogSelect={handleCatalogSelect} />
+                onCatalogSelect={handleCatalogSelect} metamaskAccount={metamaskAccount} />
             ))}
             {isTyping && (
               <div className="chat-message assistant">
@@ -714,7 +732,6 @@ export default function App() {
 
         {showMCP && <div className="mcp-panel-wrapper"><MCPPanel mcpData={latestMCP} visible={showMCP} /></div>}
         {showInventory && <div className="mcp-panel-wrapper"><InventoryPanel sessionId={SESSION_ID} visible={showInventory} /></div>}
-        {showMerchant && <div className="mcp-panel-wrapper"><MerchantPanel visible={showMerchant} /></div>}
       </main>
     </div>
   );

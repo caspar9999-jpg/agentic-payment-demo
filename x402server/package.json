@@ -12,7 +12,8 @@
   "license": "ISC",
   "description": "x402 Payment Required server for soda product payments",
   "dependencies": {
-    "express": "^5.2.1",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "ethers": "^6.17.0",
+    "express": "^5.2.1"
   }
 }

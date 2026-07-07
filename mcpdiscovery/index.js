@@ -8,57 +8,87 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import express from "express";
 
+import { createHash } from "crypto";
+
 const PORT = process.env.PORT || 3001;
 const X402_BASE = process.env.X402_BASE || "http://localhost:3002";
 
-// ─── Product Database (owned by MCP Discovery) ────────────────────
-const PRODUCTS = {
-  coke: {
-    id: "coke",
-    name: "Coca-Cola Classic",
-    description:
-      "Coca-Cola Classic is the world's most iconic carbonated soft drink. Originally created in 1886 by Dr. John S. Pemberton, it features a unique blend of natural flavors and a refreshing taste loved by billions. 330ml can, original recipe.",
-    price: "$1.99",
-    priceInCents: 199,
-    calories: 140,
+function deterministicWallet(seed) {
+  const hash = createHash("sha256").update(`merchant_${seed}`).digest("hex");
+  return "0x" + hash.slice(0, 40);
+}
+
+// ─── Merchant & Product Database ───────────────────────────────────
+const MERCHANTS = {
+  "coffee-provider": {
+    id: "coffee-provider",
+    name: "Coffee Provider",
+    wallet: process.env.MERCHANT_COFFEE,
+    products: {
+      espresso: {
+        id: "espresso", name: "Espresso", price: "$2.99", priceInCents: 299, calories: 5,
+        description: "Rich and bold single-shot espresso made from premium Arabica beans. The perfect quick caffeine boost with a smooth crema finish.",
+      },
+      latte: {
+        id: "latte", name: "Latte", price: "$3.49", priceInCents: 349, calories: 180,
+        description: "Smooth espresso topped with steamed milk and a light layer of foam. A classic Italian favorite made with whole milk.",
+      },
+      cappuccino: {
+        id: "cappuccino", name: "Cappuccino", price: "$3.99", priceInCents: 399, calories: 150,
+        description: "Equal parts espresso, steamed milk, and thick milk foam. Dusted with cocoa powder for the perfect finish.",
+      },
+      "cold-brew": {
+        id: "cold-brew", name: "Cold Brew", price: "$3.29", priceInCents: 329, calories: 10,
+        description: "Slow-steeped for 20 hours to create a smooth, naturally sweet cold coffee concentrate. Served over ice.",
+      },
+    },
   },
-  pepsi: {
-    id: "pepsi",
-    name: "Pepsi Cola",
-    description:
-      "Pepsi Cola is a bold, refreshing carbonated soft drink with a citrus-forward flavor profile. First introduced in 1893 by Caleb Bradham, Pepsi delivers a sweeter, slightly more citrusy taste compared to its competitors. 330ml can, classic recipe.",
-    price: "$1.89",
-    priceInCents: 189,
-    calories: 150,
+  "soft-drink-provider": {
+    id: "soft-drink-provider",
+    name: "Soft Drink Provider",
+    products: {
+      coke: {
+        id: "coke", name: "Coca-Cola Classic", price: "$1.99", priceInCents: 199, calories: 140,
+        description: "The world's most iconic carbonated soft drink. Originally created in 1886, it features a unique blend of natural flavors. 330ml can.",
+      },
+      pepsi: {
+        id: "pepsi", name: "Pepsi Cola", price: "$1.89", priceInCents: 189, calories: 150,
+        description: "A bold, refreshing carbonated soft drink with a citrus-forward flavor profile. Introduced in 1893 by Caleb Bradham. 330ml can.",
+      },
+      sprite: {
+        id: "sprite", name: "Sprite", price: "$1.79", priceInCents: 179, calories: 140,
+        description: "Crisp, clean lemon-lime soda beloved for its refreshing taste and caffeine-free formula. 330ml can.",
+      },
+      fanta: {
+        id: "fanta", name: "Fanta Orange", price: "$1.69", priceInCents: 169, calories: 160,
+        description: "Vibrant, fruity carbonated soft drink bursting with orange flavor. Caffeine free. 330ml can.",
+      },
+    },
   },
-  sprite: {
-    id: "sprite",
-    name: "Sprite",
-    description:
-      "Sprite is a crisp, clean lemon-lime soda beloved for its refreshing taste and caffeine-free formula. Introduced in 1961, Sprite has become the world's leading lemon-lime beverage. 330ml can, caffeine free.",
-    price: "$1.79",
-    priceInCents: 179,
-    calories: 140,
-  },
-  fanta: {
-    id: "fanta",
-    name: "Fanta Orange",
-    description:
-      "Fanta Orange is a vibrant, fruity carbonated soft drink bursting with orange flavor. Originally created in 1940, Fanta is known for its bold color and fun, refreshing taste. 330ml can, caffeine free.",
-    price: "$1.69",
-    priceInCents: 169,
-    calories: 160,
-  },
-  dasani: {
-    id: "dasani",
-    name: "Dasani Water",
-    description:
-      "Dasani Water is pure, refreshing drinking water enhanced with minerals for a crisp, clean taste. Produced by Coca-Cola, Dasani undergoes a rigorous purification process. 500ml bottle, zero calories.",
-    price: "$0.99",
-    priceInCents: 99,
-    calories: 0,
+  "water-provider": {
+    id: "water-provider",
+    name: "Water Provider",
+    products: {
+      dasani: {
+        id: "dasani", name: "Dasani Water", price: "$0.99", priceInCents: 99, calories: 0,
+        description: "Pure, refreshing drinking water enhanced with minerals for a crisp, clean taste. 500ml bottle.",
+      },
+      smartwater: {
+        id: "smartwater", name: "Smartwater", price: "$1.49", priceInCents: 149, calories: 0,
+        description: "Vapor-distilled water with added electrolytes for a pure, crisp taste. 600ml bottle.",
+      },
+    },
   },
 };
+
+// Flatten products into a single lookup map for search performance
+const PRODUCTS = {};
+for (const [merchantId, merchant] of Object.entries(MERCHANTS)) {
+  const merchantWallet = merchant.wallet || deterministicWallet(merchantId);
+  for (const [productId, product] of Object.entries(merchant.products)) {
+    PRODUCTS[productId] = { ...product, merchantId, merchantName: merchant.name, payTo: merchantWallet };
+  }
+}
 
 // ─── Register products with x402 server on startup ────────────────
 let registered = false;
@@ -66,6 +96,7 @@ let registered = false;
 async function registerWithX402() {
   for (const product of Object.values(PRODUCTS)) {
     try {
+      const payTo = product.payTo;
       const res = await fetch(`${X402_BASE}/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,6 +105,7 @@ async function registerWithX402() {
           name: product.name,
           priceInCents: product.priceInCents,
           displayPrice: product.price,
+          ...(payTo ? { payTo } : {}),
         }),
       });
       const data = await res.json();
@@ -113,7 +145,6 @@ async function waitForX402AndRegister(maxRetries = 10, intervalMs = 3000) {
   for (const product of Object.values(PRODUCTS)) {
     if (!product.payTo) {
       product.payment_url = `${X402_BASE}/resource/${product.id}`;
-      product.payTo = null;
       product.network = "eip155:84532";
     }
   }
@@ -246,52 +277,152 @@ app.get("/", (req, res) => {
     status: "running",
     endpoints: {
       sse: `http://localhost:${PORT}/sse`,
-      messages: `http://localhost:${PORT}/messages`,
+      mcp: `http://localhost:${PORT}/mcp`,
       discover: `http://localhost:${PORT}/discover`,
     },
   });
 });
 
+// ─── Helpers ───────────────────────────────────────────────────────
+function formatProductResponse(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    merchantId: p.merchantId,
+    merchantName: p.merchantName,
+    payment_url: p.payment_url,
+    price: p.price,
+    priceInCents: p.priceInCents,
+    calories: p.calories ?? null,
+    payment: p.payTo
+      ? { scheme: "exact", price: p.price, network: "eip155:84532", payTo: p.payTo }
+      : null,
+  };
+}
+
+function searchProducts(query) {
+  const lower = (query || "all").toLowerCase();
+  if (lower === "all") return Object.values(PRODUCTS);
+  return Object.values(PRODUCTS).filter(p =>
+    `${p.id} ${p.name} ${p.description}`.toLowerCase().includes(lower)
+  );
+}
+
 // Direct REST endpoint for product discovery
 app.get("/discover", (req, res) => {
-  const query = (req.query.query || "all").toLowerCase();
-  let results;
-
-  if (query === "all") {
-    results = Object.values(PRODUCTS);
-  } else {
-    results = Object.values(PRODUCTS).filter((p) => {
-      const searchable = `${p.id} ${p.name} ${p.description}`.toLowerCase();
-      return searchable.includes(query);
-    });
-  }
+  const results = searchProducts(req.query.query);
 
   if (results.length === 0) {
-    return res.status(404).json({
-      error: "No products found matching your query",
-      query,
-    });
+    return res.status(404).json({ error: "No products found matching your query", query: req.query.query });
   }
 
   res.json({
-    products: results.map((p) => ({
-      id: p.id,
-      name: p.name,
-      description: p.description,
-      payment_url: p.payment_url,
-      price: p.price,
-      priceInCents: p.priceInCents,
-      calories: p.calories ?? null,
-      payment: p.payTo
-        ? {
-            scheme: "exact",
-            price: p.price,
-            network: "eip155:84532",
-            payTo: p.payTo,
-          }
-        : null,
-    })),
+    products: results.map(formatProductResponse),
     total: results.length,
+  });
+});
+
+// MCP JSON-RPC endpoint (authentic MCP protocol over HTTP)
+app.post("/mcp", async (req, res) => {
+  const message = req.body;
+
+  if (!message || message.jsonrpc !== "2.0" || !message.method) {
+    return res.status(400).json({
+      jsonrpc: "2.0",
+      id: message?.id || null,
+      error: { code: -32600, message: "Invalid Request" },
+    });
+  }
+
+  if (message.method === "tools/list") {
+    return res.json({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        tools: [
+          {
+            name: "product_discovery",
+            description:
+              "Discover available products and get their payment links. Accepts a query string and returns matching products with details, prices, and x402 payment information.",
+            inputSchema: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description:
+                    "Search query for product discovery (e.g. 'cola', 'coke', 'pepsi', 'espresso', 'coffee', 'water', or 'all' for all products)",
+                },
+              },
+              required: ["query"],
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  if (message.method === "tools/call") {
+    const { name, arguments: args } = message.params || {};
+
+    if (name !== "product_discovery") {
+      return res.json({
+        jsonrpc: "2.0",
+        id: message.id,
+        error: { code: -32602, message: `Unknown tool: ${name}` },
+      });
+    }
+
+    const query = (args?.query || "all").toLowerCase();
+    let results;
+
+    if (query === "all") {
+      results = Object.values(PRODUCTS);
+    } else {
+      results = Object.values(PRODUCTS).filter((p) => {
+        const searchable = `${p.id} ${p.name} ${p.description}`.toLowerCase();
+        return searchable.includes(query);
+      });
+    }
+
+    if (results.length === 0) {
+      return res.json({
+        jsonrpc: "2.0",
+        id: message.id,
+        result: {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ error: "No products found matching your query", query }, null, 2),
+            },
+          ],
+        },
+      });
+    }
+
+    const response = {
+      products: results.map(formatProductResponse),
+      total: results.length,
+    };
+
+    return res.json({
+      jsonrpc: "2.0",
+      id: message.id,
+      result: {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(response, null, 2),
+          },
+        ],
+      },
+    });
+  }
+
+  return res.json({
+    jsonrpc: "2.0",
+    id: message.id,
+    error: { code: -32601, message: `Method not found: ${message.method}` },
   });
 });
 
@@ -323,7 +454,7 @@ app.listen(PORT, async () => {
   console.log(`\n🚀 MCP Discovery Server`);
   console.log(`   Port:     ${PORT}`);
   console.log(`   HTTP:     http://localhost:${PORT}`);
-  console.log(`   SSE:      http://localhost:${PORT}/sse`);
+  console.log(`   MCP RPC:  http://localhost:${PORT}/mcp`);
   console.log(`   Discover: http://localhost:${PORT}/discover?query=all`);
   console.log(`   x402:     ${X402_BASE}`);
   console.log(`\n   Registering products with x402 server...`);
