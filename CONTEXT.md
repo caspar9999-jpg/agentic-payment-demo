@@ -1,98 +1,138 @@
 # Agentic Payment Demo
 
-A demonstration of AI agents discovering paid services via MCP (Model Context Protocol) and completing purchases through the x402 payment protocol (HTTP 402 Payment Required). The agent has zero hardcoded knowledge of available products — it discovers them dynamically and handles payment programmatically.
+A demonstration of AI agents discovering paid services via MCP (Model Context Protocol) and completing purchases through the x402 payment protocol (HTTP 402 Payment Required). The agent has zero hardcoded knowledge of available products — it discovers them dynamically via MCP JSON-RPC, and handles payment programmatically with optional real MetaMask signing.
 
 ## Language
 
 ### Core protocol concepts
 
 **x402 Protocol**:
-The open web payment standard built on HTTP 402. A server advertises payment requirements, the client signs a cryptographic payment payload, and settlement occurs via a facilitator. Uses V2 headers: `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, `PAYMENT-RESPONSE` (all Base64-encoded JSON).
+The open web payment standard built on HTTP 402. A server advertises payment requirements via `PAYMENT-REQUIRED` header, the client signs a cryptographic payment payload and sends it via `PAYMENT-SIGNATURE` header, and the server responds with `PAYMENT-RESPONSE`. All headers are Base64-encoded JSON. Uses V2 header names.
 _Avoid_: x402 v1, X-Payment headers, X-Receipt
 
 **MCP (Model Context Protocol)**:
-The discovery layer. An MCP server advertises available tools (e.g. `product_discovery`) that agents use to find what exists. Agents call MCP to discover services before attempting payment.
-_Avoid_: Bazaar (separate concept — MCP is the discovery mechanism here)
-
-**Facilitator**:
-In production x402, an external service that verifies and settles blockchain payments on behalf of the server. In this demo, the facilitator role is combined with the x402 payment server since no real blockchain is used.
-_Avoid_: Proxy, payment gateway
+The discovery layer over JSON-RPC 2.0. An MCP marketplace lists available tools via `tools/list`. Agents select a tool and execute it via `tools/call`. In this demo, the `product_discovery` tool queries products with x402 payment details.
+_Avoid_: Bazaar (separate concept)
 
 **Vite Proxy**:
-A dev-server-level reverse proxy in `vite.config.js` that routes `/x402/*` to the x402 backend (`localhost:3002`) and `/mcp/*` to the MCP backend (`localhost:3001`). Makes all API requests same-origin to the browser, eliminating CORS preflight issues with custom x402 headers. The proxy is active only during `npm run dev`; production/preview builds fall back to the CORS headers on the x402 server.
+A dev-server-level reverse proxy in `vite.config.js` that routes `/x402/*` to the x402 backend (`localhost:3002`) and `/mcp/*` to the MCP backend (`localhost:3001`). Makes all API requests same-origin to the browser, eliminating CORS preflight issues with custom x402 headers.
 _Avoid_: Direct origin URLs (`http://localhost:3002`) in browser code
 
 **CAIP-2 Network Identifier**:
-Standard format for blockchain network references (e.g. `eip155:84532` for Base Sepolia). Replaces informal names like `"base-sepolia"`.
+Standard format for blockchain network references (e.g. `eip155:84532` for Base Sepolia).
 _Avoid_: plain network names
 
 ### Domain entities
 
 **Product**:
-A purchasable item in the catalog. Owned by a Merchant, discoverable via MCP Discovery, payable via x402. Has: id, name, description, price (USD string), priceInCents (integer).
+A purchasable item owned by a Merchant, discoverable via MCP, payable via x402. Has: id, name, description, price, priceInCents, merchantId, merchantName, payTo.
 
 **Merchant**:
-The seller of a product. Identified by a wallet address (hex string for EVM). Each product maps to exactly one merchant. A merchant receives payment when their product is purchased.
-_Avoid_: Vendor, seller, provider, service provider
+The seller of products. Identified by a wallet address (EVM hex string, 0x-prefixed). A merchant owns multiple products and receives payment via their wallet. In the demo, merchants are grouped by wallet address on the x402 server.
+_Avoid_: Vendor, seller, service provider
 
 **PaymentPayload**:
-The client-side object signed by the user's wallet, containing the selected payment option, amount, and destination. Sent in the `PAYMENT-SIGNATURE` header (base64-encoded). In demo mode, uses a session-based mock signature.
-_Avoid_: Receipt token, payment proof
+JSON object sent in `PAYMENT-SIGNATURE` header (base64). Contains scheme, price, network, payTo, paymentId, sessionId, and optionally signerAddress + signature (when signed via MetaMask).
+_Avoid_: Receipt token
 
 **SettlementResponse**:
-The server-side response confirming payment outcome. Sent in the `PAYMENT-RESPONSE` header (base64-encoded). Contains: status, txHash, amount, timestamp. Replaces the old receipt token concept.
+Server response in `PAYMENT-RESPONSE` header (base64). Contains status, txHash, amount, timestamp, balance. Status: `settled` or `settle_failed`.
 _Avoid_: Verification response, receipt
 
 **Demo Wallet**:
-Per-session in-memory balance (default $10.00) simulating the user's spending power. Deducted on successful settlement. Resettable for demo purposes.
-_Avoid_: Test wallet, session balance
+Per-session in-memory balance (default $10.00). Deducted on successful settlement. Resettable.
 
 **Merchant Wallet**:
-Per-product wallet address and balance tracking. Receives funds when a product is purchased. Visible in the merchant panel.
+Per-wallet address balance tracking. Multiple products can share one wallet. Visible on the merchant dashboard at `/merchant/:walletAddress`.
 
 **NFT Collectible**:
-A generated SVG digital collectible awarded to the user upon successful purchase. Each purchase produces a unique NFT with product art, tx hash, and timestamp.
+Generated SVG awarded per purchase with product art, tx hash, and timestamp.
 
 **Purchase History**:
-The user's record of completed purchases, stored as SettlementResponse objects. Accessible via inventory panel and `/purchases/:sessionId` endpoint.
+Record of completed purchases. Accessible via inventory panel and `/purchases/:sessionId`.
 
 ### Agent behavior
 
+**MCP Discovery Flow**:
+1. Agent calls `tools/list` on MCP marketplace → receives available tools
+2. Agent selects `product_discovery` tool → calls `tools/call` with user's query
+3. Tool returns products with merchant info and x402 payment details
+4. Agent processes the response based on intent type
+
 **Confirmation Gate**:
-When the agent proactively recommends a product (after a vague or indirect query), it asks the user to confirm before showing the payment card. When the user makes an explicit purchase request ("buy coke", "I want a cola"), the confirmation gate is skipped and the payment card is shown directly. The agent never completes a payment autonomously — the user must always click the pay button.
-_Avoid_: Auto-pay, auto-purchase
+When the agent proactively recommends a product, it asks for confirmation before showing the PaymentCard. Direct purchase requests ("buy coke") skip the gate. The agent never completes payment autonomously.
 
-**Catalog Fallback**:
-When the user rejects a recommendation, the agent falls back to listing all available products. Also triggered when no products match the user's query.
-
-**Recommendation**:
-The agent selects one product to highlight based on query relevance. If the user's query is vague, the agent recommends the first match from the catalog.
+**x402 Payment Flow**:
+1. User clicks Buy Now → frontend does `GET /resource/:productId` → server responds **402** with `PAYMENT-REQUIRED`
+2. PaymentCard appears with payment details (network, amount, merchant wallet)
+3. User clicks Pay → (if MetaMask connected) `personal_sign` prompt appears with the payment message
+4. Signature + payload sent as `PAYMENT-SIGNATURE` → server verifies via `ethers.verifyMessage`
+5. Server settles in-memory (debited from demo wallet, credited to merchant wallet)
+6. Returns NFT collectible + `PAYMENT-RESPONSE` header
 
 ## Relationships
 
-- A **Product** is owned by exactly one **Merchant**
-- A **Merchant** may own multiple **Products**
-- An **Agent** discovers **Products** via **MCP** Discovery
-- An **Agent** purchases a **Product** via the **x402 Protocol**
+- A **Product** is owned by exactly one **Merchant** (identified by wallet address)
+- A **Merchant** may own multiple **Products** (same `payTo` wallet)
+- An **Agent** discovers **Products** via **MCP** `tools/list` + `tools/call`
+- An **Agent** purchases a **Product** via the **x402 Protocol** (402 → signature → settlement)
 - A successful purchase produces one **SettlementResponse** and one **NFT Collectible**
 - A **Demo Wallet** holds the user's balance; each purchase debits it
 - A **Merchant Wallet** accumulates credits from purchases of that merchant's products
 
 ## Inventory
 
-- **Coca-Cola Classic** — $1.99 — coke merchant
-- **Pepsi Cola** — $1.89 — pepsi merchant
-- **Sprite** — $1.79 — sprite merchant
-- **Fanta Orange** — $1.69 — fanta merchant
-- **Dasani Water** — $0.99 — dasani merchant
+### Coffee Provider
+- Espresso — $2.99 (5 cal)
+- Latte — $3.49 (180 cal)
+- Cappuccino — $3.99 (150 cal)
+- Cold Brew — $3.29 (10 cal)
 
-## Example dialogue
+### Soft Drink Provider
+- Coca-Cola Classic — $1.99 (140 cal)
+- Pepsi Cola — $1.89 (150 cal)
+- Sprite — $1.79 (140 cal)
+- Fanta Orange — $1.69 (160 cal)
 
-> **Dev:** "When the user says 'yes' to the agent's recommendation, what does the frontend send?"
-> **Domain expert:** "It creates a mock PaymentPayload and re-requests the resource endpoint with PAYMENT-SIGNATURE. The server verifies the demo wallet balance, settles the payment, and returns the NFT collectible with a PAYMENT-RESPONSE header."
->
-> **Dev:** "What if the user says 'no' instead?"
-> **Domain expert:** "The agent falls back to the catalog fallback — lists all available products and asks which one they want."
->
-> **Dev:** "And if the wallet has insufficient balance?"
-> **Domain expert:** "The server returns a 402 with a settlement-failed PAYMENT-RESPONSE. The frontend shows the failure and offers a wallet reset."
+### Water Provider
+- Dasani Water — $0.99 (0 cal)
+- Smartwater — $1.49 (0 cal)
+
+## File Structure
+
+```
+frontend/src/
+  App.jsx          Orchestrator + all UI components (~680 lines)
+  App.css          All styles (~1980 lines)
+  sodaEngine.js    x402Client + MCP client + agent engine (~360 lines)
+  MerchantPage.jsx Merchant directory + detail pages (~190 lines)
+  metamask.js      MetaMask connect/sign utilities (~85 lines)
+  main.jsx         Entry point with BrowserRouter routes
+```
+
+## Servers
+
+| Server | Port | Endpoints |
+|---|---|---|
+| x402 | 3002 | `/register`, `/resource/:id`, `/merchants`, `/merchant/:wallet`, `/wallet/:sessionId`, `/purchases/:sessionId` |
+| MCP | 3001 | `/mcp` (JSON-RPC: `tools/list`, `tools/call`), `/discover?query=`, `/sse` |
+| Vite | 5173 | Frontend dev server with proxy to both backends |
+
+Start order: x402 → MCP (retries until x402 ready) → frontend.
+
+## Routes
+
+| Path | Page |
+|---|---|
+| `/` | Chat interface |
+| `/merchant` | MCP Marketplace directory |
+| `/merchant/:walletAddress` | Individual merchant detail page |
+
+## Configuration
+
+Merchant wallets can be overridden via environment variables:
+- `MERCHANT_COFFEE` — Coffee Provider wallet
+- `MERCHANT_SOFTDRINK` — Soft Drink Provider wallet
+- `MERCHANT_WATER` — Water Provider wallet
+
+Defaults are deterministic SHA-256 hashes of `merchant_{id}`.
