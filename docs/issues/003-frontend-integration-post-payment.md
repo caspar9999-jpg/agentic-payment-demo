@@ -1,5 +1,7 @@
 # Issue 3: Frontend Integration + Post-Payment UI
 
+**Status**: Implemented (July 2026). Added merchant pages (`/merchant`, `/merchant/:wallet`), Bazaar demo page (`/debug/bazaar`), MetaMask signing, inventory panel, and purchase tracking with real tx hashes.
+
 ## What to build
 
 Reorganize the frontend file structure, wire the new engine modules to the chat UI, and build the post-payment experience. This includes extracting components from App.jsx, integrating the agent conversation engine, adding purchase history and merchant revenue panels, and handling payment failures with wallet reset.

@@ -1,21 +1,21 @@
 # Agentic Payment Demo
 
-A demonstration of AI agents discovering paid services via MCP (Model Context Protocol) and completing purchases through the x402 payment protocol (HTTP 402 Payment Required). The agent has zero hardcoded knowledge of available products — it discovers them dynamically via MCP JSON-RPC, and handles payment programmatically with optional real MetaMask signing.
+A demonstration of AI agents discovering paid services via the x402 Bazaar discovery layer and completing purchases through the x402 payment protocol (HTTP 402 Payment Required). The agent discovers products dynamically via `/discovery/resources` and `/discovery/resources/search?q=`, and handles payment programmatically with optional real MetaMask signing.
 
 ## Language
 
 ### Core protocol concepts
 
 **x402 Protocol**:
-The open web payment standard built on HTTP 402. A server advertises payment requirements via `PAYMENT-REQUIRED` header, the client signs a cryptographic payment payload and sends it via `PAYMENT-SIGNATURE` header, and the server responds with `PAYMENT-RESPONSE`. All headers are Base64-encoded JSON. Uses V2 header names.
+The open web payment standard built on HTTP 402. A server advertises payment requirements via `PAYMENT-REQUIRED` header, the client signs a cryptographic payment payload and sends it via `PAYMENT-SIGNATURE` header, and the server responds with `PAYMENT-RESPONSE`. All headers are Base64-encoded JSON. Uses V2 header names (`x402Version`, `accepted` + `payload`). The x402 server delegates verify + settle to a remote facilitator via `HTTPFacilitatorClient` (from `@x402/core/server`). On Base Sepolia, the facilitator settles USDC transfers using EIP-3009 or Permit2.
 _Avoid_: x402 v1, X-Payment headers, X-Receipt
 
-**MCP (Model Context Protocol)**:
-The discovery layer over JSON-RPC 2.0. An MCP marketplace lists available tools via `tools/list`. Agents select a tool and execute it via `tools/call`. In this demo, the `product_discovery` tool queries products with x402 payment details.
-_Avoid_: Bazaar (separate concept)
+**Bazaar Discovery**:
+The discovery layer used by agentic.market. Lists available services via `/discovery/resources` and `/discovery/resources/search?q=`. Returns Bazaar-format resources with `type: "http"`, `accepts[]`, and `extensions.bazaar.info`.
+_Avoid_: MCP JSON-RPC (deprecated)
 
 **Vite Proxy**:
-A dev-server-level reverse proxy in `vite.config.js` that routes `/x402/*` to the x402 backend (`localhost:3002`) and `/mcp/*` to the MCP backend (`localhost:3001`). Makes all API requests same-origin to the browser, eliminating CORS preflight issues with custom x402 headers.
+A dev-server-level reverse proxy in `vite.config.js` that routes `/x402/*` to the x402 backend (`localhost:3002`) and `/bazaar/*` to the Bazaar backend (`localhost:3001`). Makes all API requests same-origin to the browser, eliminating CORS preflight issues with custom x402 headers.
 _Avoid_: Direct origin URLs (`http://localhost:3002`) in browser code
 
 **CAIP-2 Network Identifier**:
@@ -25,60 +25,60 @@ _Avoid_: plain network names
 ### Domain entities
 
 **Product**:
-A purchasable item owned by a Merchant, discoverable via MCP, payable via x402. Has: id, name, description, price, priceInCents, merchantId, merchantName, payTo.
+A purchasable item owned by a Merchant, discoverable via Bazaar, payable via x402. Has: id, name, description, price, priceInCents, merchantId, merchantName, payTo.
 
 **Merchant**:
 The seller of products. Identified by a wallet address (EVM hex string, 0x-prefixed). A merchant owns multiple products and receives payment via their wallet. In the demo, merchants are grouped by wallet address on the x402 server.
 _Avoid_: Vendor, seller, service provider
 
 **PaymentPayload**:
-JSON object sent in `PAYMENT-SIGNATURE` header (base64). Contains scheme, price, network, payTo, paymentId, sessionId, and optionally signerAddress + signature (when signed via MetaMask).
-_Avoid_: Receipt token
+JSON object sent in `PAYMENT-SIGNATURE` header (base64). V2 format: `{ x402Version, paymentId, accepted: PaymentRequirements, payload, signerAddress?, signature? }`. The `accepted` field identifies which payment option the client selected. The `payload` contains scheme-specific data (e.g., EIP-3009 authorization + signature for the exact scheme).
+_Avoid_: Flat key-value payloads without `accepted`
 
 **SettlementResponse**:
-Server response in `PAYMENT-RESPONSE` header (base64). Contains status, txHash, amount, timestamp, balance. Status: `settled` or `settle_failed`.
-_Avoid_: Verification response, receipt
+Server response in `PAYMENT-RESPONSE` header (base64). V2 format: `{ success, transaction, network, amount?, payer? }`. `success: true` means the facilitator settled on-chain; `transaction` is the real tx hash.
+_Avoid_: `status: "settled"`, `txHash`, `balance`
 
-**Demo Wallet**:
-Per-session in-memory balance (default $10.00). Deducted on successful settlement. Resettable.
+**Wallet Identity**:
+No session-based demo wallets. The user's wallet address IS their identity. Settlement goes through the x402 facilitator (on-chain USDC on Base Sepolia). Balance is on-chain, not tracked in-memory.
 
-**Merchant Wallet**:
-Per-wallet address balance tracking. Multiple products can share one wallet. Visible on the merchant dashboard at `/merchant/:walletAddress`.
+**Facilitator**:
+A remote service (e.g., `https://x402.org/facilitator`) that verifies payment payload signatures and settles USDC transfers on-chain. The x402 server delegates to it via `HTTPFacilitatorClient` (`@x402/core/server`). No in-memory wallet deduction happens on the demo server.
 
 **NFT Collectible**:
-Generated SVG awarded per purchase with product art, tx hash, and timestamp.
+Generated SVG awarded per purchase with product art, real tx hash, and purchase ID.
 
 **Purchase History**:
-Record of completed purchases. Accessible via inventory panel and `/purchases/:sessionId`.
+Tracked locally in the frontend after each successful payment. No server-side `/purchases/:sessionId` endpoint (wallet address is the canonical identity).
 
 ### Agent behavior
 
-**MCP Discovery Flow**:
-1. Agent calls `tools/list` on MCP marketplace → receives available tools
-2. Agent selects `product_discovery` tool → calls `tools/call` with user's query
-3. Tool returns products with merchant info and x402 payment details
-4. Agent processes the response based on intent type
+**Bazaar Discovery Flow**:
+1. Agent calls `/discovery/resources` on the Bazaar → receives list of available x402 services
+2. Each resource includes `type: "http"`, `accepts[]` with payment details (scheme, network, amount, payTo), and `extensions.bazaar.info` with input/output schemas
+3. Agent filters/selects a service based on price, description, and user intent
+4. Agent calls the resource → gets 402 → pays → gets content
 
 **Confirmation Gate**:
 When the agent proactively recommends a product, it asks for confirmation before showing the PaymentCard. Direct purchase requests ("buy coke") skip the gate. The agent never completes payment autonomously.
 
 **x402 Payment Flow**:
-1. User clicks Buy Now → frontend does `GET /resource/:productId` → server responds **402** with `PAYMENT-REQUIRED`
+1. User clicks Buy Now → frontend does `GET /resource/:productId` → server responds **402** with `PAYMENT-REQUIRED` (includes `accepts[]` with `amount`, `asset`, `network`, `payTo`, `maxTimeoutSeconds`, `extra`)
 2. PaymentCard appears with payment details (network, amount, merchant wallet)
 3. User clicks Pay → (if MetaMask connected) `personal_sign` prompt appears with the payment message
-4. Signature + payload sent as `PAYMENT-SIGNATURE` → server verifies via `ethers.verifyMessage`
-5. Server settles in-memory (debited from demo wallet, credited to merchant wallet)
-6. Returns NFT collectible + `PAYMENT-RESPONSE` header
+4. Payment payload (V2 format with `accepted` + `payload` + optional `signature`) sent as `PAYMENT-SIGNATURE` header (base64)
+5. Server calls `verifyPayment(payload, requirements)` on the facilitator at `https://x402.org/facilitator`
+6. If verified, server calls `settlePayment(payload, requirements)` → facilitator settles on Base Sepolia → returns real `transaction` hash
+7. Server responds with `PAYMENT-RESPONSE` header (base64) containing `{ success: true, transaction, network }` + product data in body
 
 ## Relationships
 
 - A **Product** is owned by exactly one **Merchant** (identified by wallet address)
 - A **Merchant** may own multiple **Products** (same `payTo` wallet)
-- An **Agent** discovers **Products** via **MCP** `tools/list` + `tools/call`
-- An **Agent** purchases a **Product** via the **x402 Protocol** (402 → signature → settlement)
-- A successful purchase produces one **SettlementResponse** and one **NFT Collectible**
-- A **Demo Wallet** holds the user's balance; each purchase debits it
-- A **Merchant Wallet** accumulates credits from purchases of that merchant's products
+- An **Agent** discovers **Products** via **Bazaar** `/discovery/resources`
+- An **Agent** purchases a **Product** via the **x402 Protocol** (402 → facilitator verify → facilitator settle)
+- A successful purchase produces one **SettlementResponse** (with real tx hash) and one **NFT Collectible**
+- Wallet address IS identity — no session-based demo wallets
 
 ## Inventory
 
@@ -101,32 +101,44 @@ When the agent proactively recommends a product, it asks for confirmation before
 ## File Structure
 
 ```
+x402server/
+  app.js                   Express app with hardcoded products, facilitator integration
+  lib/x402facilitator.js   Dead code — HTTPFacilitatorClient wrapper (not imported)
+  test/x402server.test.js  Backend tests (14 tests: 402 flow, facilitator, V2 payload)
+
+mcpdiscovery/
+  index.js                 Bazaar discovery server: caches x402 /products, serves resources
+  test/bazaar.test.js      Bazaar tests (11 tests: resources, search, caching, errors)
+
 frontend/src/
-  App.jsx          Orchestrator + all UI components (~680 lines)
-  App.css          All styles (~1980 lines)
-  sodaEngine.js    x402Client + MCP client + agent engine (~360 lines)
-  MerchantPage.jsx Merchant directory + detail pages (~190 lines)
-  metamask.js      MetaMask connect/sign utilities (~85 lines)
-  main.jsx         Entry point with BrowserRouter routes
-```
+  App.jsx            Chat UI orchestrator + MetaMask panel + sidebar
+  App.css            All styles
+  sodaEngine.js      x402Client (V2 payloads) + Bazaar client + agent engine
+  BazaarDemoPage.jsx Bazaar discovery data flow trace (4-step pipeline)
+  MerchantPage.jsx   Merchant directory + detail pages
+  metamask.js        MetaMask connect/sign utilities
+  main.jsx           Entry point with BrowserRouter routes
+
+RUNBOOK.md                Step-by-step demo runbook
 
 ## Servers
 
 | Server | Port | Endpoints |
 |---|---|---|
-| x402 | 3002 | `/register`, `/resource/:id`, `/merchants`, `/merchant/:wallet`, `/wallet/:sessionId`, `/purchases/:sessionId` |
-| MCP | 3001 | `/mcp` (JSON-RPC: `tools/list`, `tools/call`), `/discover?query=`, `/sse` |
+| x402 | 3002 | `/resource/:id` (protected, 402 flow), `/products`, `/merchants`, `/merchant/:wallet` |
+| Bazaar | 3001 | `/discovery/resources`, `/discovery/resources/search?q=` |
 | Vite | 5173 | Frontend dev server with proxy to both backends |
 
-Start order: x402 → MCP (retries until x402 ready) → frontend.
+Start order: x402 → Bazaar → frontend.
 
 ## Routes
 
 | Path | Page |
 |---|---|
 | `/` | Chat interface |
-| `/merchant` | MCP Marketplace directory |
-| `/merchant/:walletAddress` | Individual merchant detail page |
+| `/merchant` | Merchant directory (revenue dashboard) |
+| `/merchant/:walletAddress` | Individual merchant detail (sales, revenue, purchases) |
+| `/debug/bazaar` | Bazaar discovery data flow trace (demo-only, hidden from users) |
 
 ## Configuration
 
@@ -136,3 +148,9 @@ Merchant wallets can be overridden via environment variables:
 - `MERCHANT_WATER` — Water Provider wallet
 
 Defaults are deterministic SHA-256 hashes of `merchant_{id}`.
+
+The x402 facilitator URL defaults to `https://x402.org/facilitator` (Base Sepolia testnet). Set `FACILITATOR_URL` to use a different facilitator.
+
+USDC token address on Base Sepolia defaults to `0x036CbD53842c5426634e7929541eC2318f3dCF7e`. Set `USDC_ADDRESS` to override.
+
+**Facilitator dependency**: The x402 server requires network access to the configured facilitator. If the facilitator is unreachable, `GET /resource/:id` with a valid `PAYMENT-SIGNATURE` will return HTTP 502. The server does not function without the facilitator. Start the x402 server first and verify `/` returns 200 before starting Bazaar or frontend.

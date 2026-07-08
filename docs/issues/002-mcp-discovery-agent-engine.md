@@ -1,4 +1,6 @@
-# Issue 2: MCP Discovery + Agent Conversation Engine
+# Issue 2: Bazaar Discovery + Agent Conversation Engine
+
+**Status**: Implemented (July 2026). MCP replaced by Bazaar discovery layer (`/discovery/resources`). Catalog expanded to 10 products across 3 merchants (coffee, soft drink, water).
 
 ## What to build
 

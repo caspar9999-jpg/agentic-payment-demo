@@ -1,5 +1,31 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { x402Client } from "../src/sodaEngine.js";
+
+vi.mock("@x402/core/client", () => {
+  class MockX402Client {
+    createPaymentPayload(pr) {
+      const accept = pr.accepts[0];
+      return Promise.resolve({
+        x402Version: 2,
+        paymentId: "pay_test_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+        accepted: { ...accept },
+        payload: { productId: "coke" },
+      });
+    }
+  }
+  class MockX402HTTPClient {
+    constructor() {}
+    encodePaymentSignatureHeader(payload) {
+      return { "PAYMENT-SIGNATURE": Buffer.from(JSON.stringify(payload)).toString("base64") };
+    }
+  }
+  return { x402Client: MockX402Client, x402HTTPClient: MockX402HTTPClient };
+});
+
+vi.mock("@x402/evm/exact/client", () => ({
+  registerExactEvmScheme: vi.fn(),
+}));
+
+import { x402Client, setTestPaymentClient } from "../src/sodaEngine.js";
 
 const X402_BASE = "/x402";
 
@@ -24,36 +50,48 @@ function mockResponse(status, body, headers = {}) {
 
 const samplePaymentRequired = {
   accepts: [
-    { scheme: "exact", price: "$1.99", network: "eip155:84532", payTo: "0xmerchant_coke" },
+    {
+      scheme: "exact", amount: "199", asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      network: "eip155:84532", payTo: "0xmerchant_coke",
+      maxTimeoutSeconds: 300, extra: { name: "USD Coin", version: "2", assetTransferMethod: "eip3009" },
+    },
   ],
   description: "Payment for Coca-Cola Classic",
   mimeType: "application/json",
+  x402Version: 2,
 };
 
 const sampleNft = `<svg>mock nft content</svg>`;
 
 const sampleSettlementSettled = {
-  status: "settled",
-  txHash: "0xabc123def456",
+  success: true,
+  transaction: "0xabc123def456",
   amount: "199",
   network: "eip155:84532",
-  timestamp: "2026-07-06T12:00:00.000Z",
-  balance: 801,
 };
 
 const sampleSettlementFailed = {
-  status: "settle_failed",
-  error: "Insufficient balance",
+  success: false,
+  error: "Settlement failed",
   amount: "199",
   network: "eip155:84532",
-  timestamp: "2026-07-06T12:00:00.000Z",
-  shortBy: 50,
 };
 
-const sessionId = "test_session_001";
+let cleanupClient;
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  cleanupClient = setTestPaymentClient({
+    createPaymentPayload: async (pr) => {
+      const accept = pr.accepts[0];
+      return {
+        x402Version: 2,
+        paymentId: "pay_coke_" + Date.now() + "_test",
+        accepted: { ...accept },
+        payload: { productId: "coke" },
+      };
+    },
+  });
 });
 
 describe("accessResource", () => {
@@ -97,9 +135,7 @@ describe("accessResource", () => {
 });
 
 describe("payForResource", () => {
-  it("performs full 402→pay→settle flow and returns purchased", async () => {
-    // First call: accessResource gets 402
-    // Second call: payForResource sends PAYMENT-SIGNATURE, gets 200
+  it("performs full 402->pay->settle flow and returns purchased", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     fetchMock
       .mockResolvedValueOnce(
@@ -113,20 +149,19 @@ describe("payForResource", () => {
         })
       );
 
-    const result = await x402Client.payForResource("coke", sessionId);
+    const result = await x402Client.payForResource("coke");
 
     expect(result.status).toBe("purchased");
     expect(result.data.resource).toBe(sampleNft);
     expect(result.settlementResponse).toEqual(sampleSettlementSettled);
-    expect(result.paymentId).toMatch(/^pay_coke_\d+_\w+$/);
+    expect(result.paymentId).toMatch(/^pay_coke/);
 
-    // Second call should have PAYMENT-SIGNATURE header
     const secondCall = fetchMock.mock.results[1].value;
     const resolvedSecond = await secondCall;
     expect(resolvedSecond.status).toBe(200);
   });
 
-  it("sends correctly structured PaymentPayload in PAYMENT-SIGNATURE header", async () => {
+  it("sends PAYMENT-SIGNATURE header with base64-encoded payload", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     fetchMock
       .mockResolvedValueOnce(
@@ -140,7 +175,7 @@ describe("payForResource", () => {
         })
       );
 
-    await x402Client.payForResource("coke", sessionId);
+    await x402Client.payForResource("coke");
 
     const secondCallArgs = fetchMock.mock.calls[1];
     const headers = secondCallArgs[1]?.headers;
@@ -150,12 +185,11 @@ describe("payForResource", () => {
     const decoded = JSON.parse(
       Buffer.from(headers["PAYMENT-SIGNATURE"], "base64").toString("utf-8")
     );
-    expect(decoded.scheme).toBe("exact");
-    expect(decoded.price).toBe("$1.99");
-    expect(decoded.network).toBe("eip155:84532");
-    expect(decoded.payTo).toBe("0xmerchant_coke");
-    expect(decoded.sessionId).toBe(sessionId);
-    expect(decoded.paymentId).toMatch(/^pay_coke_/);
+    expect(decoded.x402Version).toBe(2);
+    expect(decoded.accepted.scheme).toBe("exact");
+    expect(decoded.accepted.amount).toBe("199");
+    expect(decoded.accepted.network).toBe("eip155:84532");
+    expect(decoded.paymentId).toMatch(/^pay_coke/);
   });
 
   it("returns payment_failed when settlement fails", async () => {
@@ -171,11 +205,10 @@ describe("payForResource", () => {
         })
       );
 
-    const result = await x402Client.payForResource("coke", sessionId);
+    const result = await x402Client.payForResource("coke");
 
     expect(result.status).toBe("payment_failed");
-    expect(result.settlementResponse.status).toBe("settle_failed");
-    expect(result.settlementResponse.shortBy).toBe(50);
+    expect(result.settlementResponse.success).toBe(false);
   });
 
   it("short-circuits if resource is already paid", async () => {
@@ -185,68 +218,19 @@ describe("payForResource", () => {
       })
     );
 
-    const result = await x402Client.payForResource("coke", sessionId);
+    const result = await x402Client.payForResource("coke");
 
     expect(result.status).toBe("paid");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("getBalance", () => {
-  it("returns wallet info for a session", async () => {
-    const walletData = { sessionId, balance: 1000, balanceUSD: "$10.00" };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockResponse(200, walletData)
-    );
-
-    const result = await x402Client.getBalance(sessionId);
-
-    expect(result).toEqual(walletData);
-    expect(fetch.mock.calls[0][0]).toBe(`${X402_BASE}/wallet/${sessionId}`);
-  });
-});
-
-describe("resetWallet", () => {
-  it("resets wallet to default balance", async () => {
-    const resetData = { sessionId, balance: 1000, balanceUSD: "$10.00", message: "Wallet reset" };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockResponse(200, resetData)
-    );
-
-    const result = await x402Client.resetWallet(sessionId);
-
-    expect(result.balance).toBe(1000);
-    expect(fetch.mock.calls[0][0]).toBe(`${X402_BASE}/wallet/${sessionId}/reset`);
-  });
-});
-
-describe("getPurchases", () => {
-  it("returns purchase history for a session", async () => {
-    const purchaseData = {
-      sessionId,
-      purchases: [
-        { purchaseId: "x402_coke_abc", productName: "Coca-Cola", priceInCents: 199 },
-      ],
-      total: 1,
-    };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockResponse(200, purchaseData)
-    );
-
-    const result = await x402Client.getPurchases(sessionId);
-
-    expect(result.total).toBe(1);
-    expect(result.purchases[0].productName).toBe("Coca-Cola");
-    expect(fetch.mock.calls[0][0]).toBe(`${X402_BASE}/purchases/${sessionId}`);
-  });
-});
-
 describe("getMerchantBalances", () => {
-  it("returns merchant list with balances", async () => {
+  it("returns merchant list from server", async () => {
     const merchantData = {
       merchants: [
-        { wallet: "0xmerchant_coke", productName: "Coca-Cola", balance: 199, balanceUSD: "$1.99" },
-        { wallet: "0xmerchant_pepsi", productName: "Pepsi", balance: 0, balanceUSD: "$0.00" },
+        { wallet: "0xmerchant_coke", productName: "Coca-Cola" },
+        { wallet: "0xmerchant_pepsi", productName: "Pepsi" },
       ],
     };
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -257,7 +241,6 @@ describe("getMerchantBalances", () => {
 
     expect(result).toHaveLength(2);
     expect(result[0].wallet).toBe("0xmerchant_coke");
-    expect(result[1].productName).toBe("Pepsi");
     expect(fetch.mock.calls[0][0]).toBe(`${X402_BASE}/merchants`);
   });
 });

@@ -1,18 +1,22 @@
 {
-  "name": "mcpdiscovery",
+  "name": "bazaar-discovery",
   "version": "1.0.0",
   "main": "index.js",
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "x402 Bazaar discovery server — indexes x402-compatible services",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.10"
   }
 }

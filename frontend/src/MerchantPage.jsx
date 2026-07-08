@@ -146,16 +146,16 @@ function MerchantDetail() {
         {merchant && (
           <div className="merchant-page-summary">
             <div className="merchant-summary-card">
-              <span className="merchant-summary-label">Balance</span>
-              <span className="merchant-summary-value revenue">{merchant.balanceUSD}</span>
+              <span className="merchant-summary-label">Total Revenue</span>
+              <span className="merchant-summary-value revenue">{merchant.totalRevenueUSD || "$0.00"}</span>
+            </div>
+            <div className="merchant-summary-card">
+              <span className="merchant-summary-label">Total Sales</span>
+              <span className="merchant-summary-value">{merchant.totalSales || 0}</span>
             </div>
             <div className="merchant-summary-card">
               <span className="merchant-summary-label">Products</span>
               <span className="merchant-summary-value">{merchant.totalProducts}</span>
-            </div>
-            <div className="merchant-summary-card">
-              <span className="merchant-summary-label">Network</span>
-              <span className="merchant-summary-value network">{merchant.network}</span>
             </div>
           </div>
         )}
@@ -189,6 +189,32 @@ function MerchantDetail() {
                     <td className="merchant-cell-price">{p.displayPrice}</td>
                     <td className="merchant-cell-sales">{p.sales || 0}</td>
                     <td className="merchant-cell-balance">{p.revenueUSD || "$0.00"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {!loading && merchant && merchant.recentPurchases?.length > 0 && (
+          <div className="merchant-table-container" style={{ marginTop: "32px" }}>
+            <h3 style={{ fontWeight: 600, marginBottom: "12px", color: "#94a3b8", fontSize: "14px", letterSpacing: "0.5px" }}>Recent Purchases</h3>
+            <table className="merchant-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Price</th>
+                  <th>Time</th>
+                  <th>Purchase ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {merchant.recentPurchases.map(p => (
+                  <tr key={p.purchaseId}>
+                    <td className="merchant-cell-product">{p.productName}</td>
+                    <td className="merchant-cell-price">${(p.priceInCents / 100).toFixed(2)}</td>
+                    <td className="merchant-cell-sales">{new Date(p.timestamp).toLocaleTimeString()}</td>
+                    <td className="merchant-cell-balance"><code>{p.purchaseId.slice(0, 12)}…</code></td>
                   </tr>
                 ))}
               </tbody>

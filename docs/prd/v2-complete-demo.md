@@ -1,5 +1,9 @@
 # PRD: v2 Complete Demo
 
+**Status**: Implemented (July 2026) — see RUNBOOK.md for current usage.
+
+> **Implementation note**: The PRD originally specified mocked settlement and in-memory demo wallets. The implemented version uses **real x402 SDK middleware** (`@x402/express`) with a live testnet facilitator (`https://x402.org/facilitator`) on Base Sepolia. Sessions and in-memory balances were removed — the user's MetaMask wallet is identity. Bazaar discovery replaced MCP as the discovery layer per agentic.market conventions. The 5-product catalog was expanded to 10 products across 3 merchants (coffee, soft drink, water).
+
 ## Problem Statement
 
 The current demo is a proof-of-concept with only the happy path: user asks for a drink, the agent recommends one, and the user pays via MetaMask. It has three critical gaps:

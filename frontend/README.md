@@ -1,16 +1,38 @@
-# React + Vite
+# Agentic Payment Demo — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + Vite frontend for the x402 agentic payment demo.
 
-Currently, two official plugins are available:
+## Pages
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Route | Component | Description |
+|---|---|---|
+| `/` | `App.jsx` | Chat interface — agent discovers via Bazaar, pays via x402 |
+| `/merchant` | `MerchantPage.jsx` | Merchant directory with revenue dashboard |
+| `/merchant/:wallet` | `MerchantPage.jsx` | Individual merchant detail (sales, revenue, purchases) |
+| `/debug/bazaar` | `BazaarDemoPage.jsx` | Bazaar discovery data flow trace (demo-only) |
 
-## React Compiler
+## Architecture
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **`sodaEngine.js`** — x402 client, Bazaar client, agent intent engine
+- **`metamask.js`** — MetaMask connect/disconnect/signing utilities
+- **`App.css`** — Single stylesheet for all components and pages
 
-## Expanding the Oxlint configuration
+## Proxy
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Vite dev server proxies API calls to avoid CORS:
+
+| Prefix | Target |
+|---|---|
+| `/x402/*` | `http://localhost:3002` |
+| `/bazaar/*` | `http://localhost:3001` |
+
+## Running
+
+```bash
+npm install
+npm run dev      # Dev server at localhost:5173
+npm test         # 31 tests (8 x402 client + 23 agent)
+npm run build    # Production build
+```
+
+Requires `x402server` (:3002) and `mcpdiscovery` (:3001) running first.

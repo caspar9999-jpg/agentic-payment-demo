@@ -1,5 +1,7 @@
 # Issue 1: V2 x402 Protocol Core
 
+**Status**: Implemented (July 2026). Settlement uses real `@x402/express` SDK middleware with live testnet facilitator, not mocked/demo wallets.
+
 ## What to build
 
 Rewrite the x402 server to the V2 protocol surface and build a matching x402 client library. The settlement flow becomes: client requests resource → gets 402 with `PAYMENT-REQUIRED` header → client re-requests with `PAYMENT-SIGNATURE` header → server verifies demo balance, deducts user wallet, credits merchant wallet, generates mock tx hash → returns resource body + `PAYMENT-RESPONSE` header.

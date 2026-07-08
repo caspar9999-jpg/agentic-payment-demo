@@ -9,7 +9,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/x402': { target: 'http://localhost:3002', rewrite: path => path.replace(/^\/x402/, '') },
-      '/mcp': { target: 'http://localhost:3001', rewrite: path => path.replace(/^\/mcp/, '') },
+      '/bazaar': { target: 'http://localhost:3001', rewrite: path => path.replace(/^\/bazaar/, '') },
     },
   },
 })

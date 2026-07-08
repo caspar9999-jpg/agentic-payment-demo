@@ -1,17 +1,82 @@
-const X402_BASE = "/x402";
-const MCP_BASE = "/mcp";
+import { x402Client as X402SDKClient, x402HTTPClient as X402HTTP } from "@x402/core/client";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
 
-function base64Encode(obj) {
-  const json = JSON.stringify(obj);
-  if (typeof btoa === "function") return btoa(json);
-  return Buffer.from(json, "utf-8").toString("base64");
+const X402_BASE = "/x402";
+const BAZAAR_BASE = "/bazaar";
+
+let _paymentClient = null;
+let _httpClient = null;
+
+function b64encode(obj) {
+  return typeof btoa === "function" ? btoa(JSON.stringify(obj)) : Buffer.from(JSON.stringify(obj)).toString("base64");
+}
+
+export function setTestPaymentClient(client) {
+  _paymentClient = client;
+  _httpClient = {
+    encodePaymentSignatureHeader: (payload) => ({ "PAYMENT-SIGNATURE": b64encode(payload) }),
+  };
+  return () => { _paymentClient = null; _httpClient = null; };
+}
+export function initPaymentClient(accountAddress) {
+  if (!accountAddress || typeof accountAddress !== "string") {
+    console.error("[x402] initPaymentClient called with invalid address:", accountAddress);
+    return;
+  }
+  console.log("[x402] Initializing payment client for", accountAddress.slice(0, 10) + "...");
+
+  const BASE_SEPOLIA_CHAIN_ID = "0x14a34";
+
+  const signer = {
+    address: accountAddress,
+    signTypedData: async (args) => {
+      try {
+        await window.ethereum.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: BASE_SEPOLIA_CHAIN_ID }],
+        });
+      } catch (e) {
+        if (e.code === 4902) {
+          await window.ethereum.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: BASE_SEPOLIA_CHAIN_ID,
+              chainName: "Base Sepolia",
+              rpcUrls: ["https://sepolia.base.org"],
+              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+              blockExplorerUrls: ["https://sepolia.basescan.org"],
+            }],
+          });
+        } else {
+          throw e;
+        }
+      }
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      return window.ethereum.request({
+        method: "eth_signTypedData_v4",
+        params: [accounts[0], JSON.stringify(args, (_, v) => typeof v === "bigint" ? v.toString() : v)],
+      });
+    },
+  };
+
+  const client = new X402SDKClient();
+  registerExactEvmScheme(client, {
+    signer,
+    networks: ["eip155:84532"],
+  });
+
+  _paymentClient = client;
+  _httpClient = new X402HTTP(client);
+}
+
+export function resetPaymentClient() {
+  _paymentClient = null;
+  _httpClient = null;
 }
 
 function base64Decode(str) {
-  let json;
-  if (typeof atob === "function") json = atob(str);
-  else json = Buffer.from(str, "base64").toString("utf-8");
-  return JSON.parse(json);
+  if (typeof atob === "function") return JSON.parse(atob(str));
+  return JSON.parse(Buffer.from(str, "base64").toString("utf-8"));
 }
 
 async function fetchJson(url, options) {
@@ -20,24 +85,14 @@ async function fetchJson(url, options) {
   return { status: res.status, ok: res.ok, data, headers: res.headers };
 }
 
-function createPaymentPayload(productId, sessionId, acceptOption, signerAddress, signature) {
-  return {
-    scheme: acceptOption.scheme,
-    price: acceptOption.price,
-    network: acceptOption.network,
-    payTo: acceptOption.payTo,
-    paymentId: `pay_${productId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    sessionId,
-    ...(signerAddress ? { signerAddress } : {}),
-    ...(signature ? { signature } : {}),
-  };
-}
-
 function errorMessage(status, data, settlementResponse) {
   if (settlementResponse?.error) return settlementResponse.error;
+  if (settlementResponse?.errorReason) return settlementResponse.errorReason;
   if (data?.error) return data.error;
   if (data?.settlementResponse?.error) return data.settlementResponse.error;
-  if (status === 404) return "Product not registered with x402 server (try re-registering)";
+  if (data?.message) return data.message;
+  if (status === 404) return "Product not registered";
+  if (status === 502) return `Facilitator error: ${data?.message || data?.error || "unknown"}`;
   return "Payment failed";
 }
 
@@ -65,20 +120,27 @@ export const x402Client = {
     };
   },
 
-  async payForResource(productId, sessionId, metamaskSignature, metamaskAddress) {
-    const access = await this.accessResource(productId);
-    if (access.status !== "payment_required") {
-      return access;
+  async payForResource(productId) {
+    if (!_paymentClient || !_httpClient) {
+      return { status: "error", error: "MetaMask not connected. Connect your wallet first." };
     }
 
-    const acceptOption = access.paymentRequired.accepts[0];
-    const payload = createPaymentPayload(productId, sessionId, acceptOption, metamaskAddress, metamaskSignature);
+    const access = await this.accessResource(productId);
+    if (access.status !== "payment_required") return access;
+
+    let payload;
+    try {
+      payload = await _paymentClient.createPaymentPayload(access.paymentRequired);
+    } catch (e) {
+      console.error("[x402] Failed to create payment payload:", e);
+      return { status: "error", error: `Failed to create payment: ${e.message}` };
+    }
+
+    const headers = _httpClient.encodePaymentSignatureHeader(payload);
 
     let res;
     try {
-      res = await fetch(`${X402_BASE}/resource/${productId}`, {
-        headers: { "PAYMENT-SIGNATURE": base64Encode(payload) },
-      });
+      res = await fetch(`${X402_BASE}/resource/${productId}`, { headers });
     } catch (e) {
       return { status: "error", error: `Cannot reach x402 server: ${e.message}` };
     }
@@ -104,23 +166,6 @@ export const x402Client = {
     };
   },
 
-  async getBalance(sessionId) {
-    const { data } = await fetchJson(`${X402_BASE}/wallet/${sessionId}`);
-    return data;
-  },
-
-  async resetWallet(sessionId) {
-    const { data } = await fetchJson(`${X402_BASE}/wallet/${sessionId}/reset`, {
-      method: "POST",
-    });
-    return data;
-  },
-
-  async getPurchases(sessionId) {
-    const { data } = await fetchJson(`${X402_BASE}/purchases/${sessionId}`);
-    return data;
-  },
-
   async getMerchantBalances() {
     const { data } = await fetchJson(`${X402_BASE}/merchants`);
     return data.merchants || [];
@@ -132,40 +177,42 @@ export const x402Client = {
   },
 };
 
+function productIdFromResourceUrl(url) {
+  const match = url.match(/\/resource\/([^/]+)$/);
+  return match ? match[1] : null;
+}
+
 export async function discoverProducts(query = "all") {
   try {
-    const toolsRes = await fetch(`${MCP_BASE}/mcp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    const url = query && query !== "all"
+      ? `${BAZAAR_BASE}/discovery/resources/search?q=${encodeURIComponent(query)}`
+      : `${BAZAAR_BASE}/discovery/resources`;
+    const res = await fetch(url);
+    if (!res.ok) return { products: [], total: 0 };
+    const data = await res.json();
+    const resources = data.resources || [];
+
+    const products = resources.map(r => {
+      const accept = r.accepts?.[0] || {};
+      const pid = r.extensions?.bazaar?.info?.input?.pathParams?.productId
+        || productIdFromResourceUrl(r.resource)
+        || "unknown";
+      const priceStr = accept.price || "$0.00";
+      const priceCents = parseInt(priceStr.replace(/[$.]/g, ""), 10) || 0;
+      return {
+        id: pid,
+        name: r.description?.split(" — ")[0] || pid,
+        description: r.description || "",
+        payment_url: r.resource,
+        price: priceStr,
+        priceInCents: priceCents,
+        payment: accept,
+      };
     });
-    if (!toolsRes.ok) return { products: [], total: 0 };
-    const toolsData = await toolsRes.json();
-    const tools = toolsData.result?.tools || [];
 
-    const discoveryTool = tools.find(t => t.name === "product_discovery");
-    if (!discoveryTool) return { products: [], total: 0 };
-
-    const callRes = await fetch(`${MCP_BASE}/mcp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0", id: 2, method: "tools/call",
-        params: { name: "product_discovery", arguments: { query } },
-      }),
-    });
-    if (!callRes.ok) return { products: [], total: 0 };
-    const callData = await callRes.json();
-    const content = callData.result?.content?.[0]?.text;
-    if (!content) return { products: [], total: 0 };
-
-    const parsed = JSON.parse(content);
-    return {
-      products: parsed.products || [],
-      total: parsed.total || 0,
-    };
+    return { products, total: products.length };
   } catch (e) {
-    console.error("MCP discovery failed:", e.message);
+    console.error("Bazaar discovery failed:", e.message);
     return { products: [], total: 0 };
   }
 }
