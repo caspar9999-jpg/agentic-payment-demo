@@ -238,14 +238,20 @@ function ChatMessage({ message, onConfirm, onPaid, onCatalogSelect, metamaskAcco
         {!isUser && message.agentAction === "show_catalog" && message.agentProducts && (
           <div className="catalog-list">
             <span className="catalog-title">Available Products — click to buy</span>
-            {message.agentProducts.map(p => (
-              <button key={p.id} className={`catalog-item ${message.agentProduct?.id === p.id ? "recommended" : ""}`}
-                onClick={() => onCatalogSelect && onCatalogSelect(p)} title={`Buy ${p.name} for ${p.price}`}>
-                <span className="catalog-item-name">{p.name}</span>
-                <span className="catalog-item-price">{p.price}{p.calories != null ? ` · ${p.calories} cal` : ""}</span>
-                {message.agentProduct?.id === p.id && <span className="catalog-recommend-badge">Recommended</span>}
-              </button>
-            ))}
+            {message.agentProducts.map(p => {
+              const rec = message.agentRecommendations?.find(r => r.productId === p.id);
+              return (
+                <button key={p.id} className={`catalog-item ${message.agentProduct?.id === p.id ? "recommended" : ""}`}
+                  onClick={() => onCatalogSelect && onCatalogSelect(p)} title={`Buy ${p.name} for ${p.price}`}>
+                  <div className="catalog-item-main">
+                    <span className="catalog-item-name">{p.name}</span>
+                    <span className="catalog-item-price">{p.price}{p.calories != null ? ` · ${p.calories} cal` : ""}</span>
+                    {message.agentProduct?.id === p.id && !rec && <span className="catalog-recommend-badge">Top Pick</span>}
+                  </div>
+                  {rec?.reason && <span className="catalog-reason">{rec.reason}</span>}
+                </button>
+              );
+            })}
             {message.agentProduct && (
               <div className="confirm-gate">
                 <span className="confirm-gate-text">Would you like to purchase {message.agentProduct.name} for {message.agentProduct.price}?</span>
@@ -385,6 +391,7 @@ export default function App() {
           agentAction: result.action || null,
           agentProduct: result.product || null,
           agentProducts: result.products || null,
+          agentRecommendations: result.recommendations || null,
         };
         setMessages(prev => [...prev, aiMsg]);
         resolve(aiMsg);

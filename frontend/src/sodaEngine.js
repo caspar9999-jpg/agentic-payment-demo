@@ -278,6 +278,138 @@ export async function discoverProducts(query = "all") {
   }
 }
 
+const PRODUCT_KNOWLEDGE = {
+  espresso: { caffeine: true, electrolytes: false, category: "coffee", temp: "hot", tags: ["bold", "concentrated"] },
+  latte: { caffeine: true, electrolytes: false, category: "coffee", temp: "hot", tags: ["creamy", "milky", "protein"] },
+  cappuccino: { caffeine: true, electrolytes: false, category: "coffee", temp: "hot", tags: ["foamy", "creamy"] },
+  "cold-brew": { caffeine: true, electrolytes: false, category: "coffee", temp: "cold", tags: ["smooth", "refreshing"] },
+  coke: { caffeine: true, electrolytes: false, category: "soda", temp: "cold", tags: ["classic", "carbonated"] },
+  pepsi: { caffeine: true, electrolytes: false, category: "soda", temp: "cold", tags: ["sweet", "carbonated"] },
+  sprite: { caffeine: false, electrolytes: false, category: "soda", temp: "cold", tags: ["crisp", "lemon-lime", "carbonated"] },
+  fanta: { caffeine: false, electrolytes: false, category: "soda", temp: "cold", tags: ["fruity", "orange", "carbonated"] },
+  dasani: { caffeine: false, electrolytes: false, category: "water", temp: "cold", tags: ["pure", "hydration"] },
+  smartwater: { caffeine: false, electrolytes: true, category: "water", temp: "cold", tags: ["electrolytes", "hydration", "vapor-distilled"] },
+};
+
+function matchesPattern(text, pattern) {
+  const hasWordBoundary = /^[\w-]+$/.test(pattern);
+  return hasWordBoundary
+    ? new RegExp(`\\b${pattern.replace(/-/g, '\\-')}\\b`, 'i').test(text)
+    : text.includes(pattern);
+}
+
+const SCENARIOS = [
+  {
+    id: "post_sport",
+    patterns: ["workout", "exercise", "gym", "sport", "running", "after sport", "post-workout", "post workout", "just finished", "training", "fitness", "cardio"],
+    description: "post-exercise recovery",
+    needs: { hydration: 10, electrolytes: 8, calories_for_recovery: 5, caffeine: -3, heavy: -2 },
+  },
+  {
+    id: "need_energy",
+    patterns: ["tired", "energy", "sleepy", "wake up", "need a boost", "groggy", "sluggish", "exhausted", "drained", "fatigue", "lethargic", "low energy"],
+    description: "needing an energy boost",
+    needs: { caffeine: 10, sugar: 7, light: 3, hydration: -1 },
+  },
+  {
+    id: "hot_thirsty",
+    patterns: ["very hot", "so hot", "warm", "sunny", "summer", "heat wave", "sweating", "dehydrated", "scorching", "humid"],
+    description: "hot or thirsty",
+    needs: { cold: 10, hydration: 9, light: 5, caffeine: -2, heavy: -5 },
+  },
+  {
+    id: "hungry",
+    patterns: ["hungry", "snack", "lunch break", "meal", "food", "appetite", "starving"],
+    description: "looking for something with calories",
+    needs: { calories: 8, satisfying: 5, light: -2 },
+  },
+];
+
+const SCENARIO_INTROS = {
+  post_sport: (name) => `Great — after ${name || "a workout"}, hydration and recovery are key! Here's what I'd recommend:`,
+  need_energy: (name) => `Need ${name || "an energy boost"}? Here are the best picks to wake you up:`,
+  hot_thirsty: (name) => `Perfect for a ${name || "hot day"}! Here are some refreshing options:`,
+  hungry: (name) => `Feeling ${name || "hungry"}? These will hit the spot:`,
+};
+
+function getProductCalories(pid, products) {
+  const p = products.find(x => x.id === pid);
+  return p?.calories ?? 0;
+}
+
+function scoreProduct(pid, needs, products) {
+  const info = PRODUCT_KNOWLEDGE[pid];
+  if (!info) return 0;
+  let score = 0;
+  if (needs.hydration && info.category === "water") score += needs.hydration;
+  if (needs.electrolytes && info.electrolytes) score += needs.electrolytes;
+  if (needs.caffeine !== undefined) score += info.caffeine ? needs.caffeine : 0;
+  if (needs.cold && info.temp === "cold") score += needs.cold;
+  if (needs.sugar && (info.category === "soda")) score += needs.sugar;
+  if (needs.calories) score += Math.min(getProductCalories(pid, products) / 20, needs.calories);
+  if (needs.calories_for_recovery) score += Math.min(getProductCalories(pid, products) / 30, needs.calories_for_recovery);
+  if (needs.light) {
+    const cal = getProductCalories(pid, products);
+    if (cal <= 10) score += needs.light;
+  }
+  return score;
+}
+
+const REASONS = {
+  post_sport: {
+    smartwater: "electrolytes for rehydration",
+    dasani: "pure hydration with zero calories",
+    latte: "protein and carbs to help muscle recovery",
+    sprite: "light refreshment to quench your thirst",
+    "cold-brew": "smooth cold caffeine — if you need a gentle lift",
+  },
+  need_energy: {
+    espresso: "fast-acting caffeine kick",
+    "cold-brew": "smooth sustained energy, served cold",
+    latte: "caffeine plus milk protein for lasting energy",
+    coke: "classic caffeine and sugar combo",
+    pepsi: "sweet caffeine boost",
+  },
+  hot_thirsty: {
+    smartwater: "electrolyte-infused hydration",
+    dasani: "pure, clean, zero-calorie hydration",
+    sprite: "crisp lemon-lime refreshment",
+    "cold-brew": "cold-brewed and refreshing with a caffeine lift",
+    fanta: "fruity and ice-cold carbonated refreshment",
+  },
+  hungry: {
+    latte: "creamy and filling with 180 cal",
+    cappuccino: "foamy and satisfying at 150 cal",
+    fanta: "fruity and sweet, 160 cal",
+  },
+};
+
+function getRecommendations(scenarioId, products) {
+  const scenario = SCENARIOS.find(s => s.id === scenarioId);
+  if (!scenario) return { topPicks: [], all: products };
+  const scored = products
+    .map(p => ({ ...p, score: scoreProduct(p.id, scenario.needs, products) }))
+    .sort((a, b) => b.score - a.score);
+  const topPicks = scored.filter(p => p.score > 0).slice(0, 3);
+  return { topPicks, all: scored };
+}
+
+function describeProduct(product) {
+  const cal = getProductCalories(product.id, [product]);
+  return cal > 0 ? `${product.name} (${cal} cal)` : product.name;
+}
+
+function formatRecommendationText(scenarioId, topPicks) {
+  if (topPicks.length === 0) return "";
+  const reasons = REASONS[scenarioId] || {};
+  const formatted = topPicks.map((p, i) => {
+    const reason = reasons[p.id] ? ` — ${reasons[p.id]}` : "";
+    const rank = i === 0 ? "★ " : "  ";
+    return `${rank}${describeProduct(p)} at ${p.price}${reason}`;
+  });
+  return formatted.join("\n");
+}
+
 function findBestMatch(query, products) {
   const lower = query.toLowerCase();
   const byId = products.find(p => p.id === lower || p.id.includes(lower));
@@ -315,6 +447,13 @@ function detectIntent(message, context) {
   );
   if (isNegative && context?.lastAction === "confirm_gate") {
     return { type: "no" };
+  }
+
+  for (const scenario of SCENARIOS) {
+    if (scenario.patterns.some(p => matchesPattern(lower, p))) {
+      const needsWords = scenario.patterns.filter(p => matchesPattern(lower, p));
+      return { type: "scenario", scenario: scenario.id, matchWord: needsWords[0] || scenario.description };
+    }
   }
 
   const ALL_KEYWORDS = [
@@ -359,6 +498,24 @@ async function discoverWithFallback(query, discover = discoverProducts) {
 function calorieSuffix(product) {
   if (product.calories != null) return ` (${product.calories} cal)`;
   return "";
+}
+
+function handleScenario(scenarioId, matchWord, products) {
+  const { topPicks, all } = getRecommendations(scenarioId, products);
+  const intro = SCENARIO_INTROS[scenarioId]?.(matchWord) || "Here are my recommendations based on what you said:";
+  const pickLines = formatRecommendationText(scenarioId, topPicks);
+
+  const topPick = topPicks[0] || all[0] || products[0];
+  return {
+    text: `${intro}\n\n${pickLines}`,
+    action: "show_catalog",
+    products: all,
+    product: topPick,
+    recommendations: topPicks.map(p => ({
+      productId: p.id,
+      reason: REASONS[scenarioId]?.[p.id] || null,
+    })),
+  };
 }
 
 function handleYes(context) {
@@ -481,6 +638,8 @@ export async function processMessage(userMessage, context = {}, discover = disco
       return handleNo(context, products);
     case "direct_buy":
       return handleDirectBuy(intent.query, products);
+    case "scenario":
+      return handleScenario(intent.scenario, intent.matchWord, products);
     case "specific":
       return handleSpecific(intent.keyword, products);
     case "vague":

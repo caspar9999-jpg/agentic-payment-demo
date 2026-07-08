@@ -59,6 +59,9 @@ Tracked locally in the frontend after each successful payment. No server-side `/
 3. Agent filters/selects a service based on price, description, and user intent
 4. Agent calls the resource → gets 402 → pays → gets content
 
+**Scenario-Based Recommendations**:
+The agent detects user context from natural language (post-workout, need energy, hot/thirsty, hungry) and scores products against the scenario's needs (hydration, caffeine, electrolytes, calories). The top 3 picks are displayed with reasoning (e.g. "electrolytes for rehydration"). See `PRODUCT_KNOWLEDGE`, `SCENARIOS`, and `getRecommendations()` in `sodaEngine.js`.
+
 **Confirmation Gate**:
 When the agent proactively recommends a product, it asks for confirmation before showing the PaymentCard. Direct purchase requests ("buy coke") skip the gate. The agent never completes payment autonomously.
 
