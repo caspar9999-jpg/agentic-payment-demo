@@ -8,7 +8,7 @@ import { registerExactEvmScheme } from "@x402/evm/exact/server";
 const PORT = process.env.PORT || 3002;
 const DEFAULT_NETWORK = "eip155:84532";
 const DEFAULT_ASSET = process.env.USDC_ADDRESS || "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
-const USDC_NAME = "USD Coin";
+const USDC_NAME = "USDC";
 const USDC_VERSION = "2";
 const DEFAULT_TIMEOUT = 300;
 
@@ -131,6 +131,24 @@ app.get("/merchant/:wallet", (req, res) => {
   });
 });
 
+// ─── Debug endpoints ────────────────────────────────────────────────────────
+
+app.get("/debug/requirements/:productId", (req, res) => {
+  const route = routes[`/resource/${req.params.productId}`];
+  if (!route) return res.status(404).json({ error: "Product not found" });
+  res.json({
+    productId: req.params.productId,
+    route,
+    facilitatorUrl: process.env.FACILITATOR_URL || "https://x402.org/facilitator",
+    defaultNetwork: DEFAULT_NETWORK,
+    defaultAsset: DEFAULT_ASSET,
+  });
+});
+
+app.get("/debug/purchases", (req, res) => {
+  res.json({ purchases: purchases.slice(-20), total: purchases.length });
+});
+
 // ─── x402 middleware — protects /resource/:productId routes ────────────────
 
 const facilitatorClient = new HTTPFacilitatorClient({
@@ -165,7 +183,11 @@ app.use((req, res, next) => {
     if (res.statusCode === 402 && body && typeof body === "object" && Object.keys(body).length === 0) {
       const prHeader = res.getHeader("payment-required");
       if (prHeader) {
-        try { body = JSON.parse(Buffer.from(prHeader, "base64").toString("utf8")); } catch (_) {}
+        try {
+          body = JSON.parse(Buffer.from(prHeader, "base64").toString("utf8"));
+      console.log("[x402 debug] 402 PAYMENT-REQUIRED sent to client:");
+      console.log("  full body:", JSON.stringify(body, null, 2));
+        } catch (_) {}
       }
     }
     return originalJson(body);
@@ -173,11 +195,34 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  if (req.path.startsWith("/resource/")) {
+    const allHeaders = Object.entries(req.headers).map(([k, v]) => `  ${k}: ${typeof v === "string" ? v.slice(0, 200) : v}`).join("\n");
+    console.log(`[x402 debug] Request: ${req.method} ${req.path}\n${allHeaders || "  (no headers)"}`);
+    const paySig = req.headers["payment-signature"];
+    if (paySig) {
+      try {
+        const payload = JSON.parse(Buffer.from(paySig, "base64").toString("utf8"));
+        console.log("[x402 debug] Decoded PAYMENT-SIGNATURE:");
+        console.log("  accepted:", JSON.stringify(payload.accepted, null, 4));
+        console.log("  payload.authorization:", JSON.stringify(payload.payload?.authorization, null, 4));
+        console.log("  payload.signature:", payload.payload?.signature);
+      } catch (e) {
+        console.log("[x402 debug] PAYMENT-SIGNATURE parse failed:", e.message, "| raw:", paySig.slice(0, 100));
+      }
+    }
+  }
+  next();
+});
+
 app.use(paymentMw);
 
 app.use((err, req, res, _next) => {
-  console.error("[x402] Payment error:", err?.message || err);
-  console.error("[x402] Stack:", err?.stack);
+  console.error("[x402 debug] Payment error:");
+  console.error("  message:", err?.message);
+  console.error("  statusCode:", err?.statusCode);
+  console.error("  response data:", JSON.stringify(err?.response?.data || err?.response));
+  console.error("  stack:", err?.stack?.split("\n").slice(0, 3).join("\n"));
   res.status(502).json({ error: "Facilitator error", message: err?.message || "Unknown payment error" });
 });
 

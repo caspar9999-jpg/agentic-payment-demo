@@ -230,7 +230,7 @@ describe('x402 testnet settlement (Fix #5-7 – Base Sepolia)', () => {
       expect(reqs.asset).toMatch(/^0x[a-fA-F0-9]{40}$/)
       expect(reqs.maxTimeoutSeconds).toBeGreaterThan(0)
       expect(reqs.extra).toBeDefined()
-      expect(reqs.extra.name).toBe('USD Coin')
+      expect(reqs.extra.name).toBe('USDC')
       expect(reqs.extra.version).toBe('2')
       expect(reqs.extra.assetTransferMethod).toBe('eip3009')
     })

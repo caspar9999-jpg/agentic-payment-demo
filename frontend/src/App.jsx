@@ -6,6 +6,7 @@ import {
   connectMetaMask,
   getConnectedAccounts,
   registerMetaMaskCallbacks,
+  testEIP712Signing,
 } from "./metamask.js";
 import "./App.css";
 
@@ -19,7 +20,7 @@ function TypingDots() {
   );
 }
 
-function MetaMaskPanel({ metamaskAccount, onConnect, onDisconnect, isConnecting }) {
+function MetaMaskPanel({ metamaskAccount, onConnect, onDisconnect, isConnecting, onTestSigning }) {
   const installed = isMetaMaskInstalled();
   if (!installed) {
     return (
@@ -63,6 +64,7 @@ function MetaMaskPanel({ metamaskAccount, onConnect, onDisconnect, isConnecting 
           <span className="metamask-value">{metamaskAccount.chainName}</span>
         </div>
         <button className="metamask-disconnect-btn" onClick={onDisconnect}>Disconnect</button>
+        <button className="metamask-test-btn" onClick={onTestSigning} style={{marginTop: 8, fontSize: 11, padding: '4px 8px', background: '#333', border: '1px solid #555', borderRadius: 4, color: '#aaa', cursor: 'pointer', width: '100%'}}>Test Signing (console)</button>
       </div>
     </div>
   );
@@ -344,6 +346,14 @@ export default function App() {
     resetPaymentClient();
   }, []);
 
+  const handleTestSigning = useCallback(async () => {
+    try {
+      await testEIP712Signing();
+    } catch (e) {
+      console.error("Test signing failed:", e);
+    }
+  }, []);
+
   useEffect(() => {
     async function checkExisting() {
       const account = await getConnectedAccounts();
@@ -525,7 +535,8 @@ export default function App() {
         </div>
         <div className="sidebar-bottom">
           <MetaMaskPanel metamaskAccount={metamaskAccount} onConnect={handleMetaMaskConnect}
-            onDisconnect={handleMetaMaskDisconnect} isConnecting={isConnectingMetaMask} />
+            onDisconnect={handleMetaMaskDisconnect} isConnecting={isConnectingMetaMask}
+            onTestSigning={handleTestSigning} />
           <WalletPanel metamaskAccount={metamaskAccount}
             purchasesCount={purchasedProducts.length} />
           <div className="model-badge">

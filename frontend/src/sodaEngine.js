@@ -1,5 +1,6 @@
 import { x402Client as X402SDKClient, x402HTTPClient as X402HTTP } from "@x402/core/client";
 import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { recoverTypedDataAddress } from "viem";
 
 const X402_BASE = "/x402";
 const BAZAAR_BASE = "/bazaar";
@@ -30,32 +31,83 @@ export function initPaymentClient(accountAddress) {
   const signer = {
     address: accountAddress,
     signTypedData: async (args) => {
-      try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: BASE_SEPOLIA_CHAIN_ID }],
-        });
-      } catch (e) {
-        if (e.code === 4902) {
+      const currentChain = await window.ethereum.request({ method: "eth_chainId" }).catch(() => null);
+      if (currentChain !== BASE_SEPOLIA_CHAIN_ID) {
+        try {
           await window.ethereum.request({
-            method: "wallet_addEthereumChain",
-            params: [{
-              chainId: BASE_SEPOLIA_CHAIN_ID,
-              chainName: "Base Sepolia",
-              rpcUrls: ["https://sepolia.base.org"],
-              nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
-              blockExplorerUrls: ["https://sepolia.basescan.org"],
-            }],
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: BASE_SEPOLIA_CHAIN_ID }],
           });
-        } else {
-          throw e;
+          await new Promise(r => setTimeout(r, 500));
+        } catch (e) {
+          if (e.code === 4902) {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: BASE_SEPOLIA_CHAIN_ID,
+                chainName: "Base Sepolia",
+                rpcUrls: ["https://sepolia.base.org"],
+                nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+                blockExplorerUrls: ["https://sepolia.basescan.org"],
+              }],
+            });
+          } else {
+            throw e;
+          }
         }
       }
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      return window.ethereum.request({
+      const signingAddr = accounts[0].toLowerCase();
+
+      const types = { ...args.types };
+      if (!types.EIP712Domain) {
+        const domainKeys = Object.keys(args.domain);
+        types.EIP712Domain = domainKeys.map(k => ({
+          name: k,
+          type: k === "verifyingContract" ? "address" : k === "chainId" ? "uint256" : typeof args.domain[k] === "number" ? "uint256" : "string",
+        }));
+      }
+
+      const serialized = JSON.stringify({ ...args, types }, (_, v) => typeof v === "bigint" ? v.toString() : v);
+
+      console.group("[x402 debug] signTypedData");
+      console.log("signer.address:", accountAddress.toLowerCase());
+      console.log("MetaMask selected account:", signingAddr);
+      console.log("domain:", JSON.stringify(args.domain, null, 2));
+      console.log("primaryType:", args.primaryType);
+      console.log("message:", JSON.stringify(args.message, (_, v) => typeof v === "bigint" ? v.toString() : v, 2));
+      console.log("EIP712Domain added:", !args.types?.EIP712Domain);
+      console.groupEnd();
+
+      const sig = await window.ethereum.request({
         method: "eth_signTypedData_v4",
-        params: [accounts[0], JSON.stringify(args, (_, v) => typeof v === "bigint" ? v.toString() : v)],
+        params: [accounts[0], serialized],
       });
+
+      try {
+        const recovered = await recoverTypedDataAddress({ ...args, types, signature: sig });
+        if (recovered.toLowerCase() === accountAddress.toLowerCase()) {
+          return sig;
+        }
+        console.warn("[x402 debug] Signature recovered to wrong address:", recovered, "expected:", accountAddress.toLowerCase());
+        const sigBytes = sig.replace("0x", "");
+        const r = "0x" + sigBytes.slice(0, 64);
+        const s = "0x" + sigBytes.slice(64, 128);
+        const v = parseInt(sigBytes.slice(128, 130), 16);
+        const flipV = v === 27 ? 28 : v === 28 ? 27 : v === 0 ? 1 : v === 1 ? 0 : v;
+        const fixedSig = r + s.slice(2) + flipV.toString(16).padStart(2, "0");
+        const recovered2 = await recoverTypedDataAddress({ ...args, types, signature: fixedSig });
+        if (recovered2.toLowerCase() === accountAddress.toLowerCase()) {
+          console.log("[x402 debug] Fixed v value:", v, "->", flipV);
+          return fixedSig;
+        }
+        console.warn("[x402 debug] Flipping v also failed. recovered:", recovered2);
+        console.warn("[x402 debug] mm account:", signingAddr, "signer addr:", accountAddress.toLowerCase());
+      } catch (e) {
+        console.warn("[x402 debug] Signature recovery error:", e.message);
+      }
+
+      return sig;
     },
   };
 
@@ -131,12 +183,20 @@ export const x402Client = {
     let payload;
     try {
       payload = await _paymentClient.createPaymentPayload(access.paymentRequired);
+      console.log("[x402 debug] PaymentPayload created:");
+      console.log("  x402Version:", payload.x402Version);
+      console.log("  paymentId:", payload.paymentId);
+      console.log("  accepted:", JSON.stringify(payload.accepted, null, 4));
+      console.log("  payload.authorization:", JSON.stringify(payload.payload?.authorization, null, 4));
+      console.log("  payload.signature:", payload.payload?.signature);
+      console.log("  signerAddress:", payload.signerAddress || payload.payload?.authorization?.from);
     } catch (e) {
       console.error("[x402] Failed to create payment payload:", e);
       return { status: "error", error: `Failed to create payment: ${e.message}` };
     }
 
     const headers = _httpClient.encodePaymentSignatureHeader(payload);
+    console.log("[x402 debug] PAYMENT-SIGNATURE header:", JSON.stringify(headers).slice(0, 80) + "...");
 
     let res;
     try {
@@ -146,6 +206,7 @@ export const x402Client = {
     }
 
     const data = await res.json();
+    console.log("[x402 debug] Server response:", res.status, JSON.stringify(data).slice(0, 200));
     const paymentResponse = res.headers.get("PAYMENT-RESPONSE")
       ? base64Decode(res.headers.get("PAYMENT-RESPONSE"))
       : null;
