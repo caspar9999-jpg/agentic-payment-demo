@@ -81,16 +81,29 @@ bash start-all.sh
 
 ## Step 3 — Run the Demo
 
-### Flow 1: Agent discovery + payment (main flow)
+### Flow 1: Intelligent scenario-based recommendations + payment
+
+Agent understands context and recommends drinks based on your needs:
 
 1. Open `http://localhost:5173`
 2. Connect MetaMask (left sidebar) — will prompt to switch to Base Sepolia
-3. Type in chat: *"I want a coke"* or *"what drinks do you have?"*
-4. Agent queries Bazaar → discovers products → shows catalog or payment card
-5. Click **Buy Now** → MetaMask prompts for EIP-712 signature
-6. Sign → settlement via facilitator on Base Sepolia
+3. Type something contextual like:
+   - *"I just finished a workout, what should I drink?"*
+   - *"I need an energy boost, I'm tired"*
+   - *"It's so hot today, anything refreshing?"*
+   - *"I'm hungry, what do you have?"*
+4. Agent detects the scenario (post-sport / need energy / hot & thirsty / hungry), scores all products against your needs, and shows top picks **with reasoning** (e.g. "Smartwater — electrolytes for rehydration")
+5. Browse recommendations, then click **Buy Now** to purchase, or pick any product from the catalog
+6. MetaMask prompts for EIP-712 signature → sign
+7. Settlement via facilitator on Base Sepolia — NFT collectible awarded
 
-### Flow 2: Bazaar discovery data flow (demo behind-the-scenes)
+### Flow 2: Direct purchase (quick path)
+
+1. Type: *"I want a coke"*, *"buy me a latte"*, or *"cappuccino"*
+2. Agent skips recommendations, goes straight to payment card
+3. Same x402 flow: sign → settle → NFT
+
+### Flow 3: Bazaar discovery data flow (demo behind-the-scenes)
 
 1. Open `http://localhost:5173/debug/bazaar` (or click 🔬 near input hint)
 2. Shows 4-step pipeline:
@@ -100,7 +113,7 @@ bash start-all.sh
    - **Step 4** — Side-by-side: x402 Product ↔ Bazaar Resource transformation
 3. Use search box to filter by keyword (e.g. "coffee")
 
-### Flow 3: Merchant revenue dashboard
+### Flow 4: Merchant revenue dashboard
 
 1. Open `http://localhost:5173/merchant`
 2. Shows total revenue across all merchants
