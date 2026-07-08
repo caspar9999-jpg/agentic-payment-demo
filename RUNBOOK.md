@@ -171,14 +171,17 @@ bash start-all.sh
 ## Troubleshooting
 
 | Issue | Fix |
-|---|---|
+|---|---|---|
 | `/debug/bazaar` shows empty/error | Start `x402server` first, then `mcpdiscovery`. Refresh. |
 | 402 response body is `{}` in DevTools | Normal — the x402 protocol uses headers. Body is decoded copy for readability. |
 | Payment fails with chain ID mismatch | Switch MetaMask to Base Sepolia. |
+| Payment fails with `invalid_exact_evm_signature` | Click "Test Signing" button in MetaMask panel. If `eth_signTypedData_v4` recovers to a different address than `personal_sign`, the v-fix in `signTypedData` should auto-correct it. If not, try Firefox or Rabby wallet. |
+| Payment fails with `invalid_exact_evm_token_name_mismatch` | The `USDC_NAME` in `x402server/app.js` must match the on-chain token name. Base Sepolia Circle native USDC returns `"USDC"`. Bridged USDC (USDC.e) returns `"USD Coin"`. |
 | Payment fails after signing | Get testnet USDC from faucet.circle.com. |
 | "Facilitator error" in x402 logs | Check `https://x402.org/facilitator` is reachable. |
 | Bazaar returns 0 resources | x402 server not reachable. Start x402 first, restart Bazaar. |
 | MetaMask not detected | Install MetaMask extension, refresh page. |
+| Test signing in console | Click "Test Signing (console)" in the MetaMask panel to compare `personal_sign` and `eth_signTypedData_v4` recovery. |
 
 ---
 

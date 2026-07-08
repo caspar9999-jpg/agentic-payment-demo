@@ -65,11 +65,12 @@ When the agent proactively recommends a product, it asks for confirmation before
 **x402 Payment Flow**:
 1. User clicks Buy Now → frontend does `GET /resource/:productId` → server responds **402** with `PAYMENT-REQUIRED` (includes `accepts[]` with `amount`, `asset`, `network`, `payTo`, `maxTimeoutSeconds`, `extra`)
 2. PaymentCard appears with payment details (network, amount, merchant wallet)
-3. User clicks Pay → (if MetaMask connected) `personal_sign` prompt appears with the payment message
-4. Payment payload (V2 format with `accepted` + `payload` + optional `signature`) sent as `PAYMENT-SIGNATURE` header (base64)
-5. Server calls `verifyPayment(payload, requirements)` on the facilitator at `https://x402.org/facilitator`
-6. If verified, server calls `settlePayment(payload, requirements)` → facilitator settles on Base Sepolia → returns real `transaction` hash
-7. Server responds with `PAYMENT-RESPONSE` header (base64) containing `{ success: true, transaction, network }` + product data in body
+3. User clicks Pay → (if MetaMask connected) `eth_signTypedData_v4` prompt appears with EIP-712 `TransferWithAuthorization` typed data (switches to Base Sepolia first)
+4. The signer verifies the signature client-side and auto-fixes the `v` recovery byte if needed (see Known Issues)
+5. Payment payload (V2 format with `accepted` + `payload` + optional `signature`) sent as `PAYMENT-SIGNATURE` header (base64)
+6. Server calls `verifyPayment(payload, requirements)` on the facilitator at `https://x402.org/facilitator`
+7. If verified, server calls `settlePayment(payload, requirements)` → facilitator settles on Base Sepolia → returns real `transaction` hash
+8. Server responds with `PAYMENT-RESPONSE` header (base64) containing `{ success: true, transaction, network }` + product data in body
 
 ## Relationships
 
@@ -153,4 +154,14 @@ The x402 facilitator URL defaults to `https://x402.org/facilitator` (Base Sepoli
 
 USDC token address on Base Sepolia defaults to `0x036CbD53842c5426634e7929541eC2318f3dCF7e`. Set `USDC_ADDRESS` to override.
 
+USDC token name defaults to `"USDC"` (Circle native FiatTokenProxy). Set `USDC_NAME` env var if using a bridged variant that returns a different name (e.g. `"USD Coin"`).
+
 **Facilitator dependency**: The x402 server requires network access to the configured facilitator. If the facilitator is unreachable, `GET /resource/:id` with a valid `PAYMENT-SIGNATURE` will return HTTP 502. The server does not function without the facilitator. Start the x402 server first and verify `/` returns 200 before starting Bazaar or frontend.
+
+## Known Issues
+
+### MetaMask 13.38 Chrome — EIP-712 `v` value bug
+
+MetaMask 13.38.0 on Chrome may return `eth_signTypedData_v4` signatures with an incorrect recovery ID (`v=27` even when `v=28` is correct). The signer in `frontend/src/sodaEngine.js` auto-detects this: it recovers the signer address from the signature, and if it doesn't match the expected account, flips `v` between 27 and 28. The fixed signature is used only if it recovers to the correct address. See `signTypedData` in `frontend/src/sodaEngine.js:31-112`.
+
+Run `testEIP712Signing()` in the browser console or click "Test Signing" in the MetaMask panel to diagnose.
