@@ -787,25 +787,36 @@ For 25 years, content creators on the open web had two revenue models:
 
 Both models depended on **Google sending traffic**. If Google ranked your article #1, you got thousands of visitors → ad impressions → affiliate commissions. The content itself was the bait; the ad/clicks were the revenue.
 
+#### The hard data: Cloudflare's 2026 agentic internet report
+
+Cloudflare sits at the intersection of this shift — more than 20% of the web sits behind their network. On July 1, 2026, they published their annual report on the state of the agentic internet. Key findings:
+
+| Finding | Data point | Source |
+|---|---|---|
+| **Non-human traffic** | More than 50% of Internet traffic is now non-human | [Cloudflare Agentic Internet Report, July 2026](https://blog.cloudflare.com/agentic-internet-bot-report/) |
+| **AI crawler growth** | 52% of crawler requests are for AI training (up from 22% in Spring 2025) | Same |
+| **AI adoption speed** | 2.5B users (30% of humanity) adopted generative AI in 3.5 years — 2x faster than smartphones | Same |
+| **Open web usage collapse** | For every hour searching online, only 15 minutes is on the open web | Same |
+| **Traffic decline** | Some heavily crawled industries saw human traffic decline up to 40% in under a year | Same |
+| **Crawl-to-refer ratios** | Anthropic: ~50,000 crawls per 1 referral. OpenAI: ~887:1. Perplexity: ~118:1 | [Cloudflare Radar AI Insights, Aug 2025](https://blog.cloudflare.com/ai-crawler-traffic-by-purpose-and-industry/) |
+| **AI Overviews click collapse** | When Google shows an AI summary, users click a traditional result only 8% of the time (vs ~15% without) | [Pew Research Center, July 2025](https://www.pewresearch.org/short-reads/2025/07/22/google-users-are-less-likely-to-click-on-links-when-an-ai-summary-appears-in-the-results/) cited by [Cloudflare, July 2026](https://blog.cloudflare.com/making-ai-search-smarter/) |
+| **Links inside AI summaries** | Users click a link inside an AI summary only 1% of the time | Same |
+| **Google's mixed-use crawler advantage** | Google has access to ~2x more publisher content than other AI companies because its crawler combines search + AI training in one bot | [Cloudflare Agentic Internet Report](https://blog.cloudflare.com/agentic-internet-bot-report/) |
+| **Google referral dominance** | Google accounts for ~88% of referral traffic, but increasingly keeps users in AI experiences | Same |
+| **Publisher-AI licensing deals** | 50+ publisher-AI agreements signed since 2023 | Same |
+| **Wasted crawl traffic** | More than 50% of crawler requests go to re-fetching pages that haven't changed | [Cloudflare, Making AI Search Smarter, July 2026](https://blog.cloudflare.com/making-ai-search-smarter/) |
+
+> **The bottom line:** AI crawlers now request content anywhere from a hundred to tens of thousands of times for every visitor they send back. The old bargain — let us crawl, we'll send you traffic — is broken. As Cloudflare puts it: *"If content is consumed without audiences ever visiting the source, how do content creators sustain themselves?"*
+
 #### What AI broke
 
-Three simultaneous disruptions have destroyed this model:
+Three simultaneous disruptions destroyed the creator economy:
 
-**1. AI Overviews stole the click.** Google now shows an AI-generated summary at the top of search results. For queries like "how to fix a leaky faucet" or "best running shoes 2026," the answer is right there. The user never clicks through to the creator's site. Zero-click searches went from ~25% of queries (pre-AI) to ~60% (2026).
+**1. AI Overviews stole the click.** When Google shows an AI summary, click-through drops from ~15% to ~8% for traditional results, and links inside the summary get clicked only 1% of the time ([Pew Research, 2025](https://www.pewresearch.org/short-reads/2025/07/22/google-users-are-less-likely-to-click-on-links-when-an-ai-summary-appears-in-the-results/)). The content is consumed; the creator gets nothing.
 
 **2. AI chatbots replaced search.** Users ask ChatGPT, Claude, or Perplexity directly instead of Googling. These models were trained on the creator's content but return the answer without attribution or payment. The creator gets no traffic, no ad views, no affiliate clicks.
 
-**3. AI content saturated the SERP.** Google's search results are now flooded with AI-generated content — mass-produced articles, auto-generated reviews, SEO-optimized slop. Even when users do click through, they land on garbage content trained on the original creator's work.
-
-#### The numbers
-
-| Metric | Before AI (2022) | After AI (2026) | Source |
-|---|---|---|---|
-| Google zero-click searches | ~25% | ~60% | Various analytics studies |
-| Organic traffic to publishers | Baseline | Down 30-50% | Similarweb, Parse.ly |
-| AI chatbot usage for info lookups | ~5% | ~35% | Pew Research |
-| Content creator revenue (ads) | Baseline | Down 40-60% | AdSense earnings reports |
-| SEO job postings | Baseline | Down 50%+ | Indeed, LinkedIn |
+**3. AI content saturated the SERP.** Google's search results flooded with AI-generated content — mass-produced articles, auto-generated reviews, SEO-optimized slop. Even when users do click through, they land on content that was likely trained on the original creator's work.
 
 #### Who's been hurt most
 
