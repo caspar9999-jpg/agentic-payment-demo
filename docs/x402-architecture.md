@@ -11,9 +11,10 @@
 7. [Wire Format — Headers & Payloads](#7-wire-format--headers--payloads)
 8. [Trust Model & Guarantees](#8-trust-model--guarantees)
 9. [Quality Control & Misinformation](#9-quality-control--misinformation)
-10. [Real-World Adoption](#10-real-world-adoption)
-11. [Comparison to Alternatives](#11-comparison-to-alternatives)
-12. [Glossary](#12-glossary)
+10. [Content Discovery in the AI Age](#10-content-discovery-in-the-ai-age)
+11. [Real-World Adoption](#11-real-world-adoption)
+12. [Comparison to Alternatives](#12-comparison-to-alternatives)
+13. [Glossary](#13-glossary)
 
 ---
 
@@ -707,11 +708,15 @@ In all these cases, **the content IS the HTTP response body**. The merchant can'
 
 **The one edge case is Dripstack** (pay-per-Substack-article at $0.10–$0.20). Even here, the article body is returned in the synchronous HTTP response. You know immediately if you got the content or garbage.
 
-### 8.5 Quality Control & Misinformation
+---
 
-This is the harder problem — even if the merchant delivers *something*, how do you know it's correct? This is not unique to x402; it's the same question you'd ask about any API, any website, or any LLM.
 
-#### The problem is the same on the regular web
+
+## 9. Quality Control & Misinformation
+
+The harder problem — even if the merchant delivers *something*, how do you know it's correct? This is not unique to x402; it's the same question you'd ask about any API, any website, or any LLM.
+
+### 9.1 The problem is the same on the regular web
 
 | Scenario | Traditional web | x402 |
 |---|---|---|
@@ -722,7 +727,7 @@ This is the harder problem — even if the merchant delivers *something*, how do
 
 The payment method (credit card vs. USDC) doesn't change whether the information is correct. Quality is a property of the **data source**, not the payment rail.
 
-#### What actually enforces quality
+### 9.2 What actually enforces quality
 
 **1. Merchant identity is pseudonymous but persistent.**
 A wallet address is like a username — you don't know the real person, but you can track their history. If `0xabc...` serves bad data, every agent on the network can see it and stop calling them. Starting over with a new wallet means losing their Bazaar listing, any accumulated reputation, and the facilitator registration fee.
@@ -743,7 +748,7 @@ Agentic Market curates its listings. Merchants must validate their endpoints to 
 - Automated quality probes that periodically test endpoints
 - Staking requirements (merchant deposits collateral, slashed on verified fraud)
 
-#### How this compares to API keys
+### 9.3 How this compares to API keys
 
 With traditional API keys:
 - You trust a brand name (e.g. you sign up for "CoinGecko API" because you know the brand)
@@ -756,7 +761,7 @@ With x402:
 - You can switch providers instantly with zero migration cost
 - The low barrier to try means the market self-corrects faster
 
-#### The honest answer
+### 9.4 The honest answer
 
 > For high-value, high-trust scenarios (medical data, financial advice, legal research), you should use known, verified providers — same as you would today. x402 doesn't solve blind trust. What it solves is: once you've identified a provider you trust, you can pay them per-request with no friction, no API key, no account, and instant settlement.
 
@@ -764,9 +769,160 @@ For low-value, high-volume scenarios (LLM inference, market data, search results
 
 ---
 
-## 10. Real-World Adoption
+## 10. Content Discovery in the AI Age
 
-### 10.1 Agentic Market (agentic.market)
+### 10.1 The Shift: From Human Browsing to Agent Consumption
+
+The web was designed for human eyes — HTML pages with navigation, ads, styling, and interactive elements. Search engines (Google, Bing) crawled and indexed these pages so humans could find them. This created the SEO industry: optimizing content to rank well in search results.
+
+Two shifts are changing this model:
+
+1. **AI-generated answers** — Google AI Overviews, Perplexity, ChatGPT Browse, and Claude now read web pages and summarize the answer directly in the chat. Users don't click through to the source as often. The content still needs to exist and be crawlable, but the click-through reward diminishes.
+
+2. **Agent-driven consumption** — AI agents (not humans) browse the web, call APIs, and consume content programmatically. An agent doesn't read a beautifully designed HTML page — it wants structured data, clean markdown, or a direct API call.
+
+### 10.2 Is SEO Dead?
+
+**No, but it's evolving.** Google's own ad revenue tells the story:
+
+- Google's ad revenue has remained stable or grown despite AI Overviews
+- AI Overviews include ads — Google integrated its ad system into AI-generated answers
+- Search query volume continues to grow (new users, new markets, new types of queries)
+- Google still controls the largest distribution channel on earth
+
+What IS dying is **manipulative SEO** — keyword stuffing, content farms, link schemes, mass-produced AI slop designed purely to rank. Google's E-E-A-T framework (Experience, Expertise, Authoritativeness, Trustworthiness) explicitly devalues this. Their 2024-2025 spam updates targeted scaled content abuse and expired domain abuse.
+
+**What still works for human-facing SEO:**
+- Genuinely helpful, original content (Google's "people-first" guidance)
+- Clear authorship and expertise signals (bylines, author pages)
+- Structured data (schema.org markup)
+- Strong backlink profiles from authoritative sources
+- Good page experience (Core Web Vitals)
+
+### 10.3 Why Google Isn't Losing Ad Revenue
+
+| Reason | Explanation |
+|---|---|
+| **AI Overviews include ads** | Google places ads within and alongside AI-generated answers — ad slots actually increased |
+| **Search volume still grows** | More queries = more ad impressions, even if click-through rate per query drops |
+| **Zero-click isn't zero-revenue** | Google can show an ad on a zero-click search; the user sees the ad even without visiting a website |
+| **YouTube growth** | YouTube ad revenue (connected to search) continues to grow double-digits year over year |
+| **Monopoly advantage** | No credible competitor has challenged Google's search + ad distribution at scale |
+| **Cloud revenue diversification** | Google Cloud is now profitable and growing, offsetting any search slowdown |
+
+The net effect: **content creators lose traffic, Google keeps the revenue.** The publisher (the website that wrote the article) gets fewer clicks, but Google captures the ad value that those clicks would have generated.
+
+### 10.4 Content Discoverability for AI Models
+
+If agents and LLMs are the new consumers, how do you make content discoverable by them? Several emerging standards and practices:
+
+#### /llms.txt (The New robots.txt)
+
+Proposed by Jeremy Howard (fast.ai) in September 2024, `/llms.txt` is a markdown file in a website's root that provides LLM-friendly content:
+
+```markdown
+# FastHTML
+
+> FastHTML is a python library which brings together Starlette, Uvicorn, HTMX,
+  and fastcore's `FT` "FastTags" into a library for server-rendered hypermedia.
+
+## Docs
+- [Quick start](https://fastht.ml/docs/tutorials/quickstart_for_webdevs.html.md):
+  A brief overview of many FastHTML features
+
+## Optional
+- [Starlette docs](https://starlette.io/docs.md):
+  Subset useful for FastHTML development
+```
+
+Purpose: Tell LLMs what your site is about, where the important content lives, and which files contain clean markdown versions. Unlike `robots.txt` (which blocks crawlers), `llms.txt` invites them and provides a curated starting point.
+
+Adoption (mid-2026): Agentic Market, FastHTML, nbdev projects, and a growing directory at `llmstxt.site`.
+
+#### Structured Data / Schema.org
+
+Schema.org markup (JSON-LD) remains the most reliable way to tell machines what your content means. It's used by Google, Bing, and increasingly by AI training pipelines:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "...",
+  "author": { "@type": "Person", "name": "..." },
+  "datePublished": "2026-01-01"
+}
+```
+
+#### API-First Content (The x402 Model)
+
+The most native way for agents to consume content: expose a structured API instead of (or alongside) an HTML page. This is what x402 enables:
+
+```http
+GET /resource/article-123
+Accept: application/json
+PAYMENT-SIGNATURE: ...
+```
+
+Response:
+```json
+{
+  "resource": {
+    "title": "Deep Dive",
+    "body": "...",
+    "author": "...",
+    "published": "2026-01-01"
+  },
+  "settlementResponse": { "success": true, "transaction": "0x..." }
+}
+```
+
+The agent pays $0.10 and gets a clean JSON response — no parsing HTML, no ads, no navigation to strip. The merchant knows exactly what they're delivering and gets paid per-response.
+
+#### Being in Training Data
+
+Models are trained on web crawls (Common Crawl, C4, etc.). Content that is:
+- Well-structured (clean HTML, clear headings, semantic markup)
+- Linked from authoritative sources
+- Regularly updated
+
+...is more likely to be included in training data. This feeds the model's knowledge, making it more likely to reference your content in answers (with or without attribution).
+
+#### Bazaar / Discovery Directories
+
+For agent-to-service commerce, directories like Agentic Market (`agentic.market`) serve the same role as Google for human-facing content. An agent queries:
+
+```
+GET https://agentic.market/v1/services/search?q=article+about+semiconductors
+```
+
+And gets back machine-readable results with pricing, endpoints, and capabilities. This is the equivalent of SEO for the agent economy — but instead of optimizing for Google's ranking algorithm, you optimize for the Bazaar's search index.
+
+### 10.5 The Two-Layer Strategy
+
+For a content creator preparing for the agent era:
+
+| Layer | What | Example | For whom |
+|---|---|---|---|
+| **Human-facing** | Beautiful HTML pages, SEO, social media | blog.nytimes.com | Human readers, Google search |
+| **LLM-friendly** | `/llms.txt`, clean markdown versions | blog.nytimes.com/llms.txt | ChatGPT, Claude, Perplexity |
+| **Agent-accessible** | Structured API, x402 endpoint | api.nytimes.com/x402 | AI agents, programmatic access |
+
+Each layer feeds into the next. A human discovers the content via Google → tells an agent about it → agent accesses it via API. Or an agent discovers it directly via Bazaar → pays per article → returns the content to the user.
+
+### 10.6 What This Means for x402
+
+x402 is uniquely positioned for the agent era because it solves two problems simultaneously:
+
+1. **Payment** — agents can pay per-request without accounts, API keys, or subscriptions
+2. **Discovery** — the Bazaar/Agentic Market model gives agents a structured directory to find services
+
+Traditional SEO optimized content for Google's crawler. The agent-era equivalent is: **optimize your content for structured, pay-per-request API access + Bazaar discovery.** An HTML article behind a Stripe paywall is invisible to agents. The same article as an x402 endpoint is instantly consumable.
+
+---
+
+## 11. Real-World Adoption
+
+### 11.1 Agentic Market (agentic.market)
 
 As of mid-2026, the primary Bazaar directory indexes **1,623 services** across categories:
 
@@ -781,7 +937,7 @@ As of mid-2026, the primary Bazaar directory indexes **1,623 services** across c
 
 Networks: Base (eip155:84532), Solana, Polygon.
 
-### 10.2 Notable Integrations
+### 11.2 Notable Integrations
 
 - **Coinbase CDP SDK**: Official documentation at `docs.cdp.coinbase.com/x402/welcome`
 - **Alchemy Agentic Gateway**: Access blockchain APIs without API keys, pay per request
@@ -789,7 +945,7 @@ Networks: Base (eip155:84532), Solana, Polygon.
 - **Dripstack**: Pay-per-Substack-article (agents buy individual posts without subscription)
 - **E2B**: Secure cloud sandboxes for AI agents, x402 payment
 
-### 10.3 Agent Ecosystem
+### 11.3 Agent Ecosystem
 
 The primary consumers of x402 services are AI agents:
 - **Agentic Wallet CLI** (`npx skills add coinbase/agentic-wallet-skills`): wallet management for agents
@@ -798,9 +954,9 @@ The primary consumers of x402 services are AI agents:
 
 ---
 
-## 11. Comparison to Alternatives
+## 12. Comparison to Alternatives
 
-### 11.1 L402 / Lightning HTTP 402
+### 12.1 L402 / Lightning HTTP 402
 
 | Aspect | L402 | x402 |
 |---|---|---|
@@ -810,7 +966,7 @@ The primary consumers of x402 services are AI agents:
 | Wallet | Lightning wallet | Any EVM wallet (MetaMask, etc.) |
 | Adoption | Some API gateways (Lightning Labs) | 1,600+ services on Agentic Market |
 
-### 11.2 Stripe / Traditional Payment Processors
+### 12.2 Stripe / Traditional Payment Processors
 
 | Aspect | Stripe | x402 |
 |---|---|---|
@@ -821,7 +977,7 @@ The primary consumers of x402 services are AI agents:
 | API keys | Required for each user | None (wallet IS identity) |
 | Minimum payment | ~$0.50 practical minimum | ~$0.001 (gas-bound) |
 
-### 11.3 API Key / Subscription Model
+### 12.3 API Key / Subscription Model
 
 | Aspect | API Keys | x402 |
 |---|---|---|
@@ -833,7 +989,7 @@ The primary consumers of x402 services are AI agents:
 
 ---
 
-## 12. Glossary
+## 13. Glossary
 
 | Term | Definition |
 |---|---|
