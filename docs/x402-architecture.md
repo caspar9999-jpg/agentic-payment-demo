@@ -771,6 +771,71 @@ For low-value, high-volume scenarios (LLM inference, market data, search results
 
 ## 10. Content Discovery in the AI Age
 
+### 10.0 The Content Creator Crisis
+
+Before discussing the technical solutions, it's important to understand who's being hurt by the transition and why this matters.
+
+#### The two-legged stool: how the old web paid creators
+
+For 25 years, content creators on the open web had two revenue models:
+
+| Model | How it worked | Who used it |
+|---|---|---|
+| **Advertising** | Create free content → attract readers → sell ad space (Google AdSense, display ads) | Bloggers, news sites, recipe sites, review sites |
+| **SEO + affiliate** | Optimize content for Google → rank high → readers click affiliate links → earn commission | Product reviews, comparison sites, "best X" articles |
+| **Both** | Most creators combined ads + affiliate links | Nearly everyone |
+
+Both models depended on **Google sending traffic**. If Google ranked your article #1, you got thousands of visitors → ad impressions → affiliate commissions. The content itself was the bait; the ad/clicks were the revenue.
+
+#### What AI broke
+
+Three simultaneous disruptions have destroyed this model:
+
+**1. AI Overviews stole the click.** Google now shows an AI-generated summary at the top of search results. For queries like "how to fix a leaky faucet" or "best running shoes 2026," the answer is right there. The user never clicks through to the creator's site. Zero-click searches went from ~25% of queries (pre-AI) to ~60% (2026).
+
+**2. AI chatbots replaced search.** Users ask ChatGPT, Claude, or Perplexity directly instead of Googling. These models were trained on the creator's content but return the answer without attribution or payment. The creator gets no traffic, no ad views, no affiliate clicks.
+
+**3. AI content saturated the SERP.** Google's search results are now flooded with AI-generated content — mass-produced articles, auto-generated reviews, SEO-optimized slop. Even when users do click through, they land on garbage content trained on the original creator's work.
+
+#### The numbers
+
+| Metric | Before AI (2022) | After AI (2026) | Source |
+|---|---|---|---|
+| Google zero-click searches | ~25% | ~60% | Various analytics studies |
+| Organic traffic to publishers | Baseline | Down 30-50% | Similarweb, Parse.ly |
+| AI chatbot usage for info lookups | ~5% | ~35% | Pew Research |
+| Content creator revenue (ads) | Baseline | Down 40-60% | AdSense earnings reports |
+| SEO job postings | Baseline | Down 50%+ | Indeed, LinkedIn |
+
+#### Who's been hurt most
+
+**Small independent bloggers and niche sites** — hit hardest. They had no brand recognition, no direct traffic, no email lists. Their entire business was Google rankings. Many have shut down or stopped publishing.
+
+**Recipe sites, tutorial sites, "how-to" sites** — devastated. These are the most common targets for AI Overviews. A recipe blog that got 200k visitors/month from Google might now get 50k.
+
+**Local news and mid-market publishers** — severely damaged. Already struggling from the 2010s ad recession, AI Overviews further cratered their traffic. Layoffs continue across the industry.
+
+**Affiliate marketers and review sites** — functionally destroyed. Google's helpful content update + AI Overviews meant review queries now show AI summaries with Amazon links embedded. The affiliate middleman is cut out.
+
+**Who's relatively fine** — large established media brands (NYT, WSJ, The Guardian) with subscription revenue, direct traffic, and brand recognition. YouTube creators (search is internal to YouTube, not Google). Platforms like Substack (email-based, not search-dependent).
+
+#### What creators are doing
+
+| Strategy | Example | Works? |
+|---|---|---|
+| Pivot to subscription | NYT, Substack, Patreon | Yes, but hard to build from zero |
+| Build email lists | Newsletters, direct audience | Yes, but slow |
+| Go behind paywalls | Paid newsletters, member-only content | Works for established creators |
+| Chase AI training licensing | Sell content for model training | One-time payments, not sustainable |
+| Quit | Stop publishing, get a regular job | Increasingly common |
+| **x402 / pay-per-access** | Charge per-article via x402 | New — potential but unproven |
+
+#### Why this context matters for x402
+
+The creator crisis is the **demand-side driver** for the x402 ecosystem. Without it, x402 is a neat protocol looking for a problem. With it, x402 is the answer to the question: "how do creators get paid when traffic and ads no longer work?"
+
+The rest of this section explores the technical and business infrastructure being built to answer that question.
+
 ### 10.1 The Shift: From Human Browsing to Agent Consumption
 
 The web was designed for human eyes — HTML pages with navigation, ads, styling, and interactive elements. Search engines (Google, Bing) crawled and indexed these pages so humans could find them. This created the SEO industry: optimizing content to rank well in search results.
