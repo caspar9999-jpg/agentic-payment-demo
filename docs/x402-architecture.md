@@ -931,6 +931,7 @@ Several companies and projects are targeting different parts of the AI-era conte
 | **Agentic Wallet CLI** (`npx skills add coinbase/agentic-wallet-skills`) | CLI wallet for agents to discover and pay for x402 services | Coinbase |
 | **Run402** | AI-native Postgres with x402 auth — database as a pay-per-request API | Independent |
 | **Dripstack** | Pay-per-Substack-article via x402 — agents access individual paywalled posts | Independent |
+| **Cloudflare Monetization Gateway** | Managed x402 gateway — Cloudflare customers can charge for any page, API, dataset, or MCP tool behind Cloudflare; no payment infrastructure to build | Cloudflare (public, NYSE: NET) |
 
 These form a vertically integrated stack: SDK → wallet → directory → merchant endpoints. The same company (Coinbase) backs the protocol layer, the wallet tooling, and the discovery directory.
 
@@ -978,6 +979,30 @@ These frameworks are the distribution channel for agent-driven commerce — when
 
 The traditional SEO industry is repositioning from "rank in Google's 10 blue links" to "appear in AI-generated answers." The tools are the same (structured data, content quality, authority signals) but the optimization target is different.
 
+#### Cloudflare's Bet: The Monetization Gateway (July 2026)
+
+On July 1, 2026, Cloudflare announced the **Monetization Gateway** — a managed service that lets any Cloudflare customer charge for any resource behind Cloudflare via x402. This is the most significant validation of the x402 protocol to date.
+
+**Key announcements in their Content Independence Day 2026 launch:**
+
+| Product | What it does |
+|---|---|
+| **Monetization Gateway** | Charge for any web page, dataset, API, or MCP tool via x402. Set rules like "charge $0.01 for every POST to /api/premium/*" in the Cloudflare dashboard or via Terraform. No billing infrastructure needed. |
+| **Pay Per Crawl** | AI crawlers (Perplexity, OpenAI, etc.) pay publishers per-request for crawled content. Cloudflare enforces payment at the edge before the request reaches the origin. |
+| **AI Traffic Controls** | Granular bot classification — distinguish Search bots, Agent bots, and Training bots. Block, rate-limit, or charge each category differently. |
+| **Attribution Business Insights** | Dashboard showing which AI crawlers access your content, how often, and potential revenue — fuel for crawl compensation negotiations. |
+| **Temporary Accounts for AI agents** | Agents can create Cloudflare accounts, buy domains, and deploy Workers — without a human in the loop. |
+
+**The x402 Foundation**: Alongside the gateway, Cloudflare and Coinbase announced the **x402 Foundation** under the Linux Foundation, with 25+ industry leaders joining. This moves x402 from a Coinbase-led protocol to an open industry standard.
+
+**What this means for content creators:**
+- A blogger on Cloudflare can flip a switch to charge AI crawlers $0.001 per article crawl
+- An API provider can set per-request pricing without building a billing system
+- An independent creator gets the same payment infrastructure as a Fortune 500 company
+- Settlement is in stablecoins (USDC, Open USD) — sub-cent fees, instant, irreversible
+
+Cloudflare's thesis: "The agent becomes the primary buyer on the Internet, and the request becomes the transaction." They're positioning their edge network (330+ cities) as the natural place to verify payment before the request ever reaches the origin.
+
 #### What's Missing
 
 | Gap | Why | Opportunity |
@@ -988,6 +1013,8 @@ The traditional SEO industry is repositioning from "rank in Google's 10 blue lin
 | **Bazaar for non-crypto content** | Agentic Market serves crypto-native merchants; no equivalent for traditional publishers (NYT, WSJ) | x402 enables this — any publisher can add a middleware |
 
 ---
+
+## 11. Real-World Adoption
 
 ### 11.1 Agentic Market (agentic.market)
 
