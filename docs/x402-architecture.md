@@ -88,7 +88,61 @@ Integration is minimal: wrap existing endpoints with `@x402/express` middleware.
 
 ### 2.3 Facilitator
 
-The protocol's trust anchor — a remote service (e.g., `https://x402.org/facilitator`) that:
+The facilitator handles signature verification and on-chain USDC settlement. Importantly, **the facilitator is optional** — the SDK contains all the crypto logic and can run in-process.
+
+#### Architecture: The facilitator is a pattern, not a dependency
+
+There are two layers:
+
+1. **`x402Facilitator` class** (`@x402/core/server`) — a local, in-process orchestrator that routes verify/settle calls to registered scheme handlers. It has hooks for before/after verify and settle, making it fully extensible.
+
+2. **`HTTPFacilitatorClient`** (`@x402/core/server`) — one concrete implementation that delegates verify/settle to a remote HTTP endpoint. This is a thin wrapper over the same logic.
+
+The actual crypto work (EIP-712 signature recovery, EIP-3009 `transferWithAuthorization` ABI encoding) lives in **`ExactEvmScheme`** (`@x402/evm`), which can be registered on either a local `x402Facilitator` or a remote one.
+
+#### Option A: Use a remote facilitator (common, default)
+
+```js
+import { HTTPFacilitatorClient } from "@x402/core/server";
+const facilitator = new HTTPFacilitatorClient({
+  url: "https://x402.org/facilitator",
+});
+const server = new x402ResourceServer(facilitator);
+```
+
+The merchant's server sends verify/settle requests to `x402.org/facilitator` over HTTP. The merchant never touches gas, nonces, or on-chain transactions.
+
+#### Option B: Run in-process (merchant does it themselves)
+
+```js
+import { x402Facilitator } from "@x402/core/server";
+import { registerExactEvmScheme } from "@x402/evm/exact/server";
+
+const facilitator = new x402Facilitator();
+registerExactEvmScheme(facilitator, {
+  networks: ["eip155:84532"],
+  // Provide a JSON-RPC provider URL and a gas-paying wallet
+});
+
+const server = new x402ResourceServer(facilitator);
+```
+
+The merchant runs everything locally. Signature verification uses `viem.recoverTypedDataAddress`. Settlement submits `USDC.transferWithAuthorization()` via JSON-RPC.
+
+#### What value does the remote facilitator provide?
+
+| Concern | With remote facilitator | Without (in-process) |
+|---|---|---|
+| **Gas fees** | Facilitator pays gas for settlement txs | Merchant must hold ETH on their server to pay gas |
+| **Private key security** | Merchant's server never holds a gas-paying key | Merchant must store a private key for gas on their server |
+| **Nonce management** | Facilitator coordinates EIP-3009 nonces globally | Merchant must track nonces per-payer themselves |
+| **USDC balance check** | Facilitator checks balance before settling | Merchant must check balance via RPC |
+| **Replay protection** | Facilitator checks `paymentId` uniqueness | Merchant must track used `paymentId`s themselves |
+| **Failure recovery** | Facilitator handles retries and reversions | Merchant must implement retry logic |
+
+The remote facilitator is primarily a **convenience layer** that shifts operational burden (gas, nonces, monitoring) off the merchant's server. The protocol itself is decentralized — any of these can run locally.
+
+#### How it works (remote flow)
 
 - **Verifies** EIP-712 signature validity and payload integrity
 - **Checks** that the signer has sufficient USDC balance
@@ -713,7 +767,7 @@ The primary consumers of x402 services are AI agents:
 |---|---|
 | **402** | HTTP status code "Payment Required" — the core protocol signal |
 | **x402** | The protocol implementing HTTP 402 with crypto settlement |
-| **Facilitator** | Remote service that verifies signatures and settles on-chain |
+| **Facilitator** | Component that verifies EIP-712 signatures and settles USDC on-chain. Can run remotely (`HTTPFacilitatorClient`) or in-process (`x402Facilitator` class). The `ExactEvmScheme` contains the actual crypto logic. |
 | **Bazaar** | Discovery layer that indexes x402 endpoints for agent search |
 | **Agentic Market** | Production Bazaar at agentic.market |
 | **PAYMENT-REQUIRED** | Response header containing payment options (base64 JSON) |
@@ -726,6 +780,6 @@ The primary consumers of x402 services are AI agents:
 | **payTo** | Merchant's wallet address that receives the USDC |
 | **paymentId** | Unique identifier preventing replay attacks |
 | **V2** | Current x402 protocol version (V2 header format) |
-| **Facilitator URL** | `https://x402.org/facilitator` (production) |
+| **Facilitator URL** | `https://x402.org/facilitator` — the default remote facilitator. Merchants can also run `x402Facilitator` in-process instead. |
 | **SKU / productId** | Individual purchasable item on a merchant's server |
 | **Dynamic routes** | Pattern where Bazaar auto-discovers products via `GET /products` |
