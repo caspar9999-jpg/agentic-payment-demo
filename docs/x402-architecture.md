@@ -1003,6 +1003,161 @@ On July 1, 2026, Cloudflare announced the **Monetization Gateway** — a managed
 
 Cloudflare's thesis: "The agent becomes the primary buyer on the Internet, and the request becomes the transaction." They're positioning their edge network (330+ cities) as the natural place to verify payment before the request ever reaches the origin.
 
+### 10.8 The Full Stack: End-to-End Architecture
+
+The agent-era internet requires a new stack with distinct layers. Here is the complete picture, from content creation to agent consumption:
+
+```
+  AGENT / USER LAYER
+  ┌───────────────────────────────────────────────────────────────┐
+  │  AI Agents · Chatbots · Autonomous Bots                      │
+  │  (Claude, ChatGPT, Perplexity, custom agents)                │
+  │  Wallet: Coinbase Agentic Wallet · MetaMask · Embedded       │
+  └───────────┬───────────────────────────────────────────────────┘
+              │ discovers services       │ calls endpoints
+              ▼                          ▼
+  ┌──────────────────────┐  ┌─────────────────────────────────────┐
+  │ DISCOVERY LAYER      │  │ PAYMENT ENFORCEMENT LAYER           │
+  │                      │  │                                     │
+  │ Bazaar / Agentic     │  │ Cloudflare Monetization Gateway     │
+  │   Market             │  │ Self-hosted x402 middleware          │
+  │ /llms.txt directories│  │ (@x402/express on your server)       │
+  │ AI search engines    │  │ Facilitator (x402.org or in-process) │
+  │ (Perplexity, Google) │  │                                     │
+  └──────────────────────┘  └──────────────┬──────────────────────┘
+                                           │ forwards verified request
+                                           ▼
+  ┌───────────────────────────────────────────────────────────────┐
+  │ CONTENT / SERVICE LAYER                                       │
+  │                                                               │
+  │  Publishers  │  API Providers  │  SaaS  │  MCP Tools          │
+  │  (NYT, blogs)│  (CoinGecko,    │  (Run402,  │  (agent tools)  │
+  │              │   Nansen, ...)  │   Alchemy) │                 │
+  └──────────────┴─────────────────┴────────────┴─────────────────┘
+              │ gets paid
+              ▼
+  ┌───────────────────────────────────────────────────────────────┐
+  │ SETTLEMENT LAYER                                              │
+  │                                                               │
+  │  x402 Facilitator → On-chain USDC (Base, Solana)              │
+  │  Stablecoin settlement: USDC, Open USD                        │
+  │  Sub-second · sub-cent fees · irreversible                    │
+  └───────────────────────────────────────────────────────────────┘
+```
+
+#### Layer 1: Content / Service (The supply side)
+
+**What it is:** The actual resource being paid for — a web page, API response, dataset, LLM inference, compute, or tool invocation.
+
+**Who provides it:**
+- **Publishers & creators:** Independent bloggers, news outlets (NYT, Substack), documentation sites
+- **API providers:** CoinGecko, Nansen, Alchemy, Wolfram|Alpha, Tripadvisor — data and infrastructure sold per-request
+- **SaaS platforms:** Run402 (Postgres), QuickNode (RPC), E2B (sandboxes), StableEmail (email)
+- **MCP / tool providers:** Agent tools that require payment per invocation
+
+**Revenue model before x402:** Ads, subscriptions, API keys with monthly billing. All required user accounts, payment processor integration, and chargeback risk. x402 converts them to pay-per-request with zero onboarding cost.
+
+**Key companies:** Nansen, Alchemy, CoinGecko, Deepgram, Tripadvisor, Perplexity, Run402, QuickNode, E2B, Browserbase, Firecrawl, Dripstack, and hundreds more on Agentic Market.
+
+#### Layer 2: Payment Enforcement (The toll booth)
+
+**What it is:** The middleware that intercepts requests, returns 402 with pricing, verifies payment, and only forwards to the origin if payment is valid.
+
+**Two deployment models:**
+
+| Model | How it works | Who runs it | Best for |
+|---|---|---|---|
+| **Self-hosted middleware** | `@x402/express` on the merchant's server | The merchant | Custom setups, full control |
+| **Managed edge gateway** | Cloudflare Monetization Gateway | Cloudflare (330+ cities) | Anyone behind Cloudflare, zero config |
+
+**What it handles:**
+- Parsing `PAYMENT-SIGNATURE` headers
+- Calling the facilitator for verification
+- Caching verification results for performance
+- Returning 402 or forwarding to origin
+
+**Key companies:** Cloudflare (Monetization Gateway), Coinbase (@x402 SDK), the merchant themselves (self-hosted).
+
+#### Layer 3: Discovery / Indexing (The directory)
+
+**What it is:** Where agents find services. The equivalent of Google for the agent economy.
+
+**Three discovery channels:**
+
+| Channel | Example | How agents use it |
+|---|---|---|
+| **Bazaar directory** | Agentic Market (`agentic.market/v1/services`) | API call → structured JSON with pricing, endpoints, capabilities |
+| **/llms.txt** | `blog.example.com/llms.txt` | LLM reads markdown → knows the site's content and structure |
+| **Web search (AI-native)** | Perplexity, Google AI Overviews | Agent asks a question → search engine crawls and summarizes |
+
+These are complementary. An agent might discover a service via Perplexity, then access it directly via x402 for the full content.
+
+**Key companies:** Agentic Market (Coinbase), llmstxt.site, Perplexity, Google, You.com.
+
+#### Layer 4: Agent Framework & Wallet (The consumer infrastructure)
+
+**What it is:** The software that agents use to discover, evaluate, and pay for services.
+
+**Sub-layers:**
+
+| Component | What it does | Key players |
+|---|---|---|
+| **Wallet** | Holds USDC, signs EIP-712 payments | Coinbase Agentic Wallet, MetaMask, embedded wallets |
+| **Framework** | Orchestrates discovery → payment → consumption | LangChain, Vercel AI SDK, custom agents |
+| **Agent runtime** | Runs the agent, manages context | Claude (Anthropic), ChatGPT (OpenAI), custom runtimes |
+
+**The payment flow inside an agent:**
+1. Agent needs data (e.g. "what's the latest ETH price?")
+2. Agent searches Bazaar or web → finds CoinGecko x402 endpoint
+3. Agent's wallet signs the payment (EIP-712 typed data)
+4. Agent sends `PAYMENT-SIGNATURE` header with the request
+5. Agent receives the data → validates it → uses it
+
+**Key companies:** Coinbase (Agentic Wallet), LangChain, Vercel, Anthropic, OpenAI.
+
+#### Layer 5: Settlement (The financial rail)
+
+**What it is:** The actual transfer of value — verifying signatures, moving USDC from buyer to seller on-chain.
+
+**Key properties:**
+- **Speed:** ~10-30 seconds (Base/Solana block time)
+- **Cost:** fractions of a cent (no payment processor middleman)
+- **Finality:** irreversible once settled (no chargebacks)
+- **Rail agnostic:** currently Base and Solana USDC, extensible to any chain
+
+**Key players:** x402 facilitator (`x402.org`), Circle (USDC), Open USD, Base (Coinbase), Solana.
+
+#### How the layers fit together (worked example)
+
+An agent wants to research semiconductor stocks:
+
+1. **Agent framework** (Layer 4) decides it needs financial data
+2. **Discovery** (Layer 3): Agent queries Agentic Market → finds `edgar.apitoll.cloud` (SEC filings API, $0.003/call)
+3. **Payment enforcement** (Layer 2): Agent calls the API → Cloudflare edge intercepts → returns 402 with price
+4. **Agent wallet** (Layer 4): Signs the EIP-712 payload
+5. **Agent retries** with `PAYMENT-SIGNATURE` header
+6. **Payment enforcement** verifies via facilitator → forwards to origin
+7. **Content** (Layer 1): Server returns structured SEC filing data
+8. **Settlement** (Layer 5): Facilitator settles $0.003 USDC on-chain → merchant gets paid
+
+Total time: ~15 seconds. Cost: $0.003 + gas. No accounts, no API keys, no subscriptions.
+
+#### The economic flow
+
+```
+                    $0.003 USDC
+  Agent ◄────────────────────────────── Merchant
+    │                                       │
+    │  $0.003 USDC                           │
+    ├────────────────────────────────────────┤
+    │  (facilitator settles on-chain)        │
+    │                                        │
+    │  $0 (gas paid by facilitator or        │
+    │   deducted from settlement)            │
+```
+
+The agent pays exactly $0.003. The merchant receives exactly $0.003 minus network gas (typically <$0.001). No payment processor takes 2.9% + $0.30. No monthly subscription. No chargeback risk.
+
 #### What's Missing
 
 | Gap | Why | Opportunity |
