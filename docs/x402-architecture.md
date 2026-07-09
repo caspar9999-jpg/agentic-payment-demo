@@ -918,9 +918,76 @@ x402 is uniquely positioned for the agent era because it solves two problems sim
 
 Traditional SEO optimized content for Google's crawler. The agent-era equivalent is: **optimize your content for structured, pay-per-request API access + Bazaar discovery.** An HTML article behind a Stripe paywall is invisible to agents. The same article as an x402 endpoint is instantly consumable.
 
----
+### 10.7 Companies Building in This Space
 
-## 11. Real-World Adoption
+Several companies and projects are targeting different parts of the AI-era content discovery stack:
+
+#### Agent-to-Service Commerce (x402 / Agentic Market)
+
+| Company / Project | What they do | Backed by |
+|---|---|---|
+| **Agentic Market** (`agentic.market`) | Bazaar directory indexing 1,624 x402 services — LLMs, data APIs, search, infrastructure | Coinbase CDP protocol |
+| **Coinbase CDP x402** | Protocol SDK (`@x402/core`, `@x402/evm`, `@x402/express`) — the infrastructure layer for x402 endpoints | Coinbase |
+| **Agentic Wallet CLI** (`npx skills add coinbase/agentic-wallet-skills`) | CLI wallet for agents to discover and pay for x402 services | Coinbase |
+| **Run402** | AI-native Postgres with x402 auth — database as a pay-per-request API | Independent |
+| **Dripstack** | Pay-per-Substack-article via x402 — agents access individual paywalled posts | Independent |
+
+These form a vertically integrated stack: SDK → wallet → directory → merchant endpoints. The same company (Coinbase) backs the protocol layer, the wallet tooling, and the discovery directory.
+
+#### /llms.txt Ecosystem
+
+| Company / Project | What they do |
+|---|---|
+| **llmstxt.site** | Directory of websites with `/llms.txt` files — the Google-equivalent index for LLM-friendly content |
+| **directory.llmstxt.cloud** | Alternative directory for discovering `/llms.txt` enabled sites |
+| **llms_txt2ctx** | CLI tool (Python) that expands `/llms.txt` into full LLM context files |
+| **vitepress-plugin-llms** | Auto-generates `/llms.txt` from VitePress documentation sites |
+| **docusaurus-plugin-llms** | Auto-generates `/llms.txt` from Docusaurus documentation sites |
+| **PagePilot (VS Code)** | VS Code extension that loads `/llms.txt` context for AI coding assistance |
+
+Adoption as of mid-2026: thousands of sites including Apache Camel, Vite, Next.js, Postman, DreamHost, CarParts.com, WeatherBug, Pepperfry, Barco, Hyperliquid, and many more. Notably, **it's mostly documentation sites and e-commerce** — not news or content publishers yet.
+
+#### AI-Native Search Engines
+
+| Company | Product | Business Model |
+|---|---|---|
+| **Perplexity** | AI search with citations, source transparency | Subscription ($20/mo Pro) + ads (planned) |
+| **You.com** | AI-powered search with app integration | Subscription + API usage |
+| **Google** | AI Overviews in search results | Ads (same business model, more ad slots) |
+
+These are the primary consumers of web content in the AI era — they crawl pages, summarize answers, and cite sources. They don't pay publishers for the content they use (except Perplexity's publisher revenue share program, which is nascent).
+
+#### Agent Frameworks & Tooling
+
+| Company / Project | What they do | Agent Integration |
+|---|---|---|
+| **LangChain** | Agent framework with tool-use loops | Can integrate x402 as a tool |
+| **Vercel AI SDK** | AI SDK with tool calling | Can integrate x402 as a tool |
+| **Coinbase Agentic Wallet** | CLI wallet + skills | Native x402 payment support |
+| **OpenAI / Anthropic** | LLM providers with browsing capability | Models can discover and consume web content but don't pay for it |
+
+These frameworks are the distribution channel for agent-driven commerce — when an agent needs a service, it uses a tool/framework to discover, evaluate, and pay.
+
+#### Traditional SEO Adapting
+
+| Company | Adaptation |
+|---|---|
+| **Semrush, Ahrefs, Moz** | Adding AI content scoring, AI overview tracking, and "optimize for AI answers" features |
+| **BrightEdge** | AI content performance tracking — how often your content appears in AI-generated answers |
+| **Schema.org** | Structured data standard — increasingly used by AI training pipelines, not just Google |
+
+The traditional SEO industry is repositioning from "rank in Google's 10 blue links" to "appear in AI-generated answers." The tools are the same (structured data, content quality, authority signals) but the optimization target is different.
+
+#### What's Missing
+
+| Gap | Why | Opportunity |
+|---|---|---|
+| **Content verification / fact-checking service** | No one has built a reliable, scalable fact-checking API that agents can call per-request | Huge — agents need to verify outputs programmatically |
+| **Publisher payment from AI crawlers** | Perplexity's revenue share is tiny; Google/OpenAI don't pay for crawled content | If x402 becomes the standard for paid content access, publishers could charge AI crawlers per-article |
+| **Cross-referencing / reputation for agents** | No on-chain reputation system for merchant wallets | Staking, slashing, and dispute resolution layers |
+| **Bazaar for non-crypto content** | Agentic Market serves crypto-native merchants; no equivalent for traditional publishers (NYT, WSJ) | x402 enables this — any publisher can add a middleware |
+
+---
 
 ### 11.1 Agentic Market (agentic.market)
 
