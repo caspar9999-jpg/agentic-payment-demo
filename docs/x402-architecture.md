@@ -10,9 +10,10 @@
 6. [Agent Payment Flow — Step by Step](#6-agent-payment-flow--step-by-step)
 7. [Wire Format — Headers & Payloads](#7-wire-format--headers--payloads)
 8. [Trust Model & Guarantees](#8-trust-model--guarantees)
-9. [Real-World Adoption](#9-real-world-adoption)
-10. [Comparison to Alternatives](#10-comparison-to-alternatives)
-11. [Glossary](#11-glossary)
+9. [Quality Control & Misinformation](#9-quality-control--misinformation)
+10. [Real-World Adoption](#10-real-world-adoption)
+11. [Comparison to Alternatives](#11-comparison-to-alternatives)
+12. [Glossary](#12-glossary)
 
 ---
 
@@ -686,17 +687,88 @@ Fields:
 | Minimum viable payment | ~$0.50 (fee-dominated) | ~$0.001 (limited by gas cost) |
 | Recurring billing | Built-in | Not supported (pay-per-request only) |
 
-### 8.4 The Trust Reality
+### 8.4 Content Delivery Trust — Practical Reality
 
-In practice, x402 doesn't introduce new trust problems — it inherits the same ones as the existing web. When you pay NYT $4/month via credit card, you're trusting them to deliver the articles. x402 just changes the settlement mechanism to be instant, final, and fee-free. The content delivery trust problem is orthogonal and would require additional protocol layers or reputation systems to solve.
+The "merchant can take payment and not deliver" concern is real but largely theoretical for how x402 is actually used today.
+
+**Most services are synchronous API calls, not async delivery.** Looking at the 1,623 services on Agentic Market:
+- LLM inference (Claude, ChatGPT, DeepSeek) — pay $0.001, get the API response immediately
+- Data queries (CoinGecko, Nansen, Wolfram|Alpha) — pay $0.01, get structured data back
+- Infrastructure (Alchemy RPC, QuickNode) — pay per RPC call, get the result
+- Search (Perplexity, Exa, Tavily) — pay $0.001, get search results
+
+In all these cases, **the content IS the HTTP response body**. The merchant can't "not deliver" — the response IS the product. If they returned a 200 with empty body, you'd know in milliseconds and stop using them. There's no delayed fulfillment, no download-later model.
+
+**Incentives strongly discourage cheating:**
+- Most merchants are established companies (Alchemy, Nansen, CoinGecko, Perplexity, Deepgram, Tripadvisor)
+- They're identifiable by their Bazaar description, domain, and registered wallet
+- Cheating for $0.001 per request would destroy their reputation and Bazaar listing instantly
+- The facilitator can de-register wallets that violate terms
+
+**The one edge case is Dripstack** (pay-per-Substack-article at $0.10–$0.20). Even here, the article body is returned in the synchronous HTTP response. You know immediately if you got the content or garbage.
+
+### 8.5 Quality Control & Misinformation
+
+This is the harder problem — even if the merchant delivers *something*, how do you know it's correct? This is not unique to x402; it's the same question you'd ask about any API, any website, or any LLM.
+
+#### The problem is the same on the regular web
+
+| Scenario | Traditional web | x402 |
+|---|---|---|
+| You ask an LLM a question | Could hallucinate | Could hallucinate |
+| You buy data from an API | Could be stale/wrong | Could be stale/wrong |
+| You read a news article | Could be misinformation | Could be misinformation |
+| You hire a freelancer | Could deliver bad work | N/A in x402 |
+
+The payment method (credit card vs. USDC) doesn't change whether the information is correct. Quality is a property of the **data source**, not the payment rail.
+
+#### What actually enforces quality
+
+**1. Merchant identity is pseudonymous but persistent.**
+A wallet address is like a username — you don't know the real person, but you can track their history. If `0xabc...` serves bad data, every agent on the network can see it and stop calling them. Starting over with a new wallet means losing their Bazaar listing, any accumulated reputation, and the facilitator registration fee.
+
+**2. Brand-name merchants have brand risk.**
+Alchemy, Nansen, CoinGecko, Perplexity, Deepgram — these are public companies with reputations. They're not going to serve bad data for $0.001 per call. Their x402 endpoints are backed by the same infrastructure as their paid API products.
+
+**3. Agents can verify outputs programmatically.**
+An agent querying CoinGecko for ETH price can cross-reference with another source. An agent calling an LLM can check for internal consistency. The agent is not blindly trusting — it's consuming data and can validate it before acting on it.
+
+**4. The market punishes bad actors naturally.**
+If a merchant starts serving garbage, agents stop buying. The merchant's revenue drops to zero. There's no contract lock-in, no subscription to cancel — just a wallet that nobody pays anymore. This is stronger enforcement than credit card chargebacks, which take days and have limits.
+
+**5. Bazaar-level curation (evolving).**
+Agentic Market curates its listings. Merchants must validate their endpoints to be indexed. In the future, Bazaars could add:
+- Verified badges (domain-verified, KYC'd, etc.)
+- Community ratings and reviews
+- Automated quality probes that periodically test endpoints
+- Staking requirements (merchant deposits collateral, slashed on verified fraud)
+
+#### How this compares to API keys
+
+With traditional API keys:
+- You trust a brand name (e.g. you sign up for "CoinGecko API" because you know the brand)
+- You pay upfront (monthly subscription) and hope the quality is worth it
+- If quality drops, you cancel and eat the sunk cost
+
+With x402:
+- You don't need to know the brand — you can try a service for $0.001
+- If quality is bad, you lose $0.001, not $100/month
+- You can switch providers instantly with zero migration cost
+- The low barrier to try means the market self-corrects faster
+
+#### The honest answer
+
+> For high-value, high-trust scenarios (medical data, financial advice, legal research), you should use known, verified providers — same as you would today. x402 doesn't solve blind trust. What it solves is: once you've identified a provider you trust, you can pay them per-request with no friction, no API key, no account, and instant settlement.
+
+For low-value, high-volume scenarios (LLM inference, market data, search results), the combination of tiny per-request cost + merchant reputation + agent-side verification is sufficient. The economics don't justify cheating.
 
 ---
 
-## 9. Real-World Adoption
+## 10. Real-World Adoption
 
-### 9.1 Agentic Market (agentic.market)
+### 10.1 Agentic Market (agentic.market)
 
-As of mid-2026, the primary Bazaar directory indexes **1,621 services** across categories:
+As of mid-2026, the primary Bazaar directory indexes **1,623 services** across categories:
 
 | Category | Example Services | Typical Price |
 |---|---|---|
@@ -709,7 +781,7 @@ As of mid-2026, the primary Bazaar directory indexes **1,621 services** across c
 
 Networks: Base (eip155:84532), Solana, Polygon.
 
-### 9.2 Notable Integrations
+### 10.2 Notable Integrations
 
 - **Coinbase CDP SDK**: Official documentation at `docs.cdp.coinbase.com/x402/welcome`
 - **Alchemy Agentic Gateway**: Access blockchain APIs without API keys, pay per request
@@ -717,7 +789,7 @@ Networks: Base (eip155:84532), Solana, Polygon.
 - **Dripstack**: Pay-per-Substack-article (agents buy individual posts without subscription)
 - **E2B**: Secure cloud sandboxes for AI agents, x402 payment
 
-### 9.3 Agent Ecosystem
+### 10.3 Agent Ecosystem
 
 The primary consumers of x402 services are AI agents:
 - **Agentic Wallet CLI** (`npx skills add coinbase/agentic-wallet-skills`): wallet management for agents
@@ -726,9 +798,9 @@ The primary consumers of x402 services are AI agents:
 
 ---
 
-## 10. Comparison to Alternatives
+## 11. Comparison to Alternatives
 
-### 10.1 L402 / Lightning HTTP 402
+### 11.1 L402 / Lightning HTTP 402
 
 | Aspect | L402 | x402 |
 |---|---|---|
@@ -738,7 +810,7 @@ The primary consumers of x402 services are AI agents:
 | Wallet | Lightning wallet | Any EVM wallet (MetaMask, etc.) |
 | Adoption | Some API gateways (Lightning Labs) | 1,600+ services on Agentic Market |
 
-### 10.2 Stripe / Traditional Payment Processors
+### 11.2 Stripe / Traditional Payment Processors
 
 | Aspect | Stripe | x402 |
 |---|---|---|
@@ -749,7 +821,7 @@ The primary consumers of x402 services are AI agents:
 | API keys | Required for each user | None (wallet IS identity) |
 | Minimum payment | ~$0.50 practical minimum | ~$0.001 (gas-bound) |
 
-### 10.3 API Key / Subscription Model
+### 11.3 API Key / Subscription Model
 
 | Aspect | API Keys | x402 |
 |---|---|---|
@@ -761,7 +833,7 @@ The primary consumers of x402 services are AI agents:
 
 ---
 
-## 11. Glossary
+## 12. Glossary
 
 | Term | Definition |
 |---|---|
