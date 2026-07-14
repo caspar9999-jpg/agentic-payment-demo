@@ -227,13 +227,15 @@ export const x402Client = {
     };
   },
 
-  async getMerchantBalances() {
-    const { data } = await fetchJson(`${X402_BASE}/merchants`);
+  async getMerchantBalances(rangeHours) {
+    const qs = rangeHours ? `?rangeHours=${rangeHours}` : "";
+    const { data } = await fetchJson(`${X402_BASE}/merchants${qs}`);
     return data.merchants || [];
   },
 
-  async getMerchant(merchantId) {
-    const { data } = await fetchJson(`${X402_BASE}/merchant/${merchantId}`);
+  async getMerchant(merchantId, rangeHours) {
+    const qs = rangeHours ? `?rangeHours=${rangeHours}` : "";
+    const { data } = await fetchJson(`${X402_BASE}/merchant/${merchantId}${qs}`);
     return data;
   },
 };

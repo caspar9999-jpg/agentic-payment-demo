@@ -94,6 +94,14 @@ function WalletPanel({ metamaskAccount, purchasesCount }) {
   );
 }
 
+const PRODUCT_ICONS = {
+  espresso: "☕", latte: "☕", cappuccino: "☕", "cold-brew": "🧊",
+  coke: "🥤", pepsi: "🥤", sprite: "🥤", fanta: "🍊",
+  dasani: "💧", smartwater: "💧",
+};
+
+function productIcon(id) { return PRODUCT_ICONS[id] || "📦"; }
+
 function PaymentCard({ product, onPaid, metamaskAccount }) {
   const [isPaying, setIsPaying] = useState(false);
   const [paid, setPaid] = useState(false);
@@ -130,6 +138,7 @@ function PaymentCard({ product, onPaid, metamaskAccount }) {
         </div>
         <div className="payment-card-body">
           <div className="purchased-product">
+            <span className="purchased-icon">{productIcon(product.id)}</span>
             <div className="purchased-info">
               <span className="purchased-name">{product.name}</span>
               <span className="purchased-price">{product.price}</span>
@@ -179,19 +188,42 @@ function PaymentCard({ product, onPaid, metamaskAccount }) {
         </div>
       <div className="payment-card-body">
         <div className="payment-product-row">
+          <span className="payment-product-icon">{productIcon(product.id)}</span>
           <div className="payment-product-info">
             <span className="payment-product-name">{product.name}</span>
             <span className="payment-product-price">{product.price}</span>
           </div>
         </div>
+        <div className="payment-summary-box">
+          <span className="payment-summary-title">Payment Summary</span>
+          <div className="payment-summary-row">
+            <span className="payment-summary-label">Item</span>
+            <span className="payment-summary-value">{product.name}</span>
+          </div>
+          <div className="payment-summary-row">
+            <span className="payment-summary-label">Price</span>
+            <span className="payment-summary-value amount">{product.price}</span>
+          </div>
+          {product.calories != null && (
+            <div className="payment-summary-row">
+              <span className="payment-summary-label">Calories</span>
+              <span className="payment-summary-value">{product.calories} cal</span>
+            </div>
+          )}
+          <div className="payment-summary-divider" />
+          <div className="payment-summary-row">
+            <span className="payment-summary-label">You receive</span>
+            <span className="payment-summary-value">x402 Collectible NFT</span>
+          </div>
+        </div>
         <div className="payment-details">
           <div className="payment-detail-row">
             <span className="payment-detail-label">Network</span>
-            <span className="payment-detail-value">eip155:84532</span>
+            <span className="payment-detail-value">Base Sepolia (eip155:84532)</span>
           </div>
           <div className="payment-detail-row">
-            <span className="payment-detail-label">Amount</span>
-            <span className="payment-detail-value amount">{product.price}</span>
+            <span className="payment-detail-label">Asset</span>
+            <span className="payment-detail-value">USDC</span>
           </div>
           <div className="payment-detail-row">
             <span className="payment-detail-label">Pay To</span>
@@ -204,9 +236,12 @@ function PaymentCard({ product, onPaid, metamaskAccount }) {
           {isPaying ? (
             <><span className="pay-spinner" /> Processing Payment...</>
           ) : (
-            `Pay ${product.price}${metamaskAccount ? " via x402" : " via x402"}`
+            `Pay ${product.price} via x402`
           )}
         </button>
+        <div className="payment-note">
+          MetaMask will prompt you to sign a USRC-20 transfer authorization for {product.price}.
+        </div>
       </div>
     </div>
   );
@@ -309,12 +344,47 @@ function InventoryPanel({ purchases, visible }) {
   );
 }
 
+function TransactionsPanel({ purchases, visible }) {
+  if (!visible) return null;
+
+  return (
+    <div className="inventory-panel">
+      <div className="inventory-header">
+        <span className="inventory-title">Transactions</span>
+        <span className="inventory-count">{purchases.length} total</span>
+      </div>
+      <div className="inventory-body">
+        {purchases.length === 0 && <p className="inventory-empty">No transactions yet.</p>}
+        {purchases.map(p => {
+          const txHash = p.settlementResponse?.transaction || p.txHash;
+          const ts = p.data?.timestamp || p.timestamp || p.settlementResponse?.timestamp;
+          const time = ts ? new Date(ts).toLocaleString() : null;
+          return (
+            <div key={p.paymentId || p.purchaseId} className="tx-item">
+              <div className="tx-item-top">
+                <span className="tx-item-name">{p.data?.name || p.productName || "Purchase"}</span>
+                <span className="tx-item-amount">{p.data?.displayPrice || p.displayPrice || "—"}</span>
+              </div>
+              <div className="tx-item-details">
+                {time && <span className="tx-item-time">{time}</span>}
+                {txHash && <span className="tx-item-tx" title={txHash}>TX: {txHash.slice(0, 10)}…{txHash.slice(-6)}</span>}
+              </div>
+              {p.purchaseId && <span className="tx-item-id">ID: {p.purchaseId}</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [agentContext, setAgentContext] = useState({});
   const [showInventory, setShowInventory] = useState(false);
+  const [showTransactions, setShowTransactions] = useState(false);
   const [metamaskAccount, setMetamaskAccount] = useState(null);
   const [isConnectingMetaMask, setIsConnectingMetaMask] = useState(false);
   const [purchasedProducts, setPurchasedProducts] = useState([]);
@@ -523,11 +593,16 @@ export default function App() {
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
             </svg> Chat
           </button>
-          <button className={`nav-item ${showInventory ? "active" : ""}`} onClick={() => setShowInventory(!showInventory)}>
+          <button className={`nav-item ${showInventory ? "active" : ""}`} onClick={() => { setShowInventory(!showInventory); setShowTransactions(false); }}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
               <polyline points="3.27 6.96 12 12.01 20.73 6.96" /><line x1="12" y1="22.08" x2="12" y2="12" />
             </svg> Inventory
+          </button>
+          <button className={`nav-item ${showTransactions ? "active" : ""}`} onClick={() => { setShowTransactions(!showTransactions); setShowInventory(false); }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            </svg> Transactions
           </button>
         </div>
         <div className="sidebar-bottom">
@@ -575,6 +650,7 @@ export default function App() {
         </div>
 
         {showInventory && <div className="mcp-panel-wrapper"><InventoryPanel purchases={purchasedProducts} visible={showInventory} /></div>}
+        {showTransactions && <div className="mcp-panel-wrapper"><TransactionsPanel purchases={purchasedProducts} visible={showTransactions} /></div>}
       </main>
     </div>
   );

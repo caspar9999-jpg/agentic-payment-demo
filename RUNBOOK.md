@@ -35,11 +35,18 @@ A local demo of AI agents discovering paid services via the x402 Bazaar discover
 
 ## Step 1 — Install Dependencies
 
-```bash
-cd x402server && npm install
-cd ../mcpdiscovery && npm install
-cd ../frontend && npm install
-cd ..
+Open PowerShell and navigate to the project root first:
+
+```powershell
+cd "C:\Projects\Agentic_Payment_Demo\agenticpayment (1)\agenticpayment"
+```
+
+Then install each service (run these one at a time):
+
+```powershell
+cd x402server; npm install; cd ..
+cd mcpdiscovery; npm install; cd ..
+cd frontend; npm install; cd ..
 ```
 
 ---
@@ -48,30 +55,33 @@ cd ..
 
 **Order matters:** x402 first (Bazaar queries it), then Bazaar, then frontend.
 
-### Option A: Manual (3 terminals)
+### Option A: Manual (3 terminals, PowerShell)
+
+Start three separate PowerShell windows, each from the project root first:
+
+```powershell
+cd "C:\Projects\Agentic_Payment_Demo\agenticpayment (1)\agenticpayment"
+```
 
 **Terminal 1 — x402 Payment Server:**
-```bash
-cd x402server
-node index.js
+```powershell
+cd x402server; node index.js
 ```
 Verify: `curl http://localhost:3002/` → `{"name":"x402-payment-server","status":"running"}`
 
 **Terminal 2 — Bazaar Discovery:**
-```bash
-cd mcpdiscovery
-node index.js
+```powershell
+cd mcpdiscovery; node index.js
 ```
 Verify: `curl http://localhost:3001/discovery/resources` → `{"resources":[...]}`
 
 **Terminal 3 — Frontend:**
-```bash
-cd frontend
-npm run dev
+```powershell
+cd frontend; npm run dev
 ```
 Verify: Open `http://localhost:5173`
 
-### Option B: Single command (if bash available)
+### Option B: Single command (bash/Git Bash only)
 
 ```bash
 bash start-all.sh
@@ -94,14 +104,15 @@ Agent understands context and recommends drinks based on your needs:
    - *"I'm hungry, what do you have?"*
 4. Agent detects the scenario (post-sport / need energy / hot & thirsty / hungry), scores all products against your needs, and shows top picks **with reasoning** (e.g. "Smartwater — electrolytes for rehydration")
 5. Browse recommendations, then click **Buy Now** to purchase, or pick any product from the catalog
-6. MetaMask prompts for EIP-712 signature → sign
-7. Settlement via facilitator on Base Sepolia — NFT collectible awarded
+6. **Payment summary** appears in the chat — shows item name, price, calories, what you receive (NFT), network, asset, and pay-to wallet
+7. Click Pay → MetaMask prompts for EIP-712 signature → sign
+8. Settlement via facilitator on Base Sepolia — NFT collectible awarded
 
 ### Flow 2: Direct purchase (quick path)
 
 1. Type: *"I want a coke"*, *"buy me a latte"*, or *"cappuccino"*
 2. Agent skips recommendations, goes straight to payment card
-3. Same x402 flow: sign → settle → NFT
+3. Same x402 flow: review payment summary → sign → settle → NFT
 
 ### Flow 3: Bazaar discovery data flow (demo behind-the-scenes)
 
@@ -116,9 +127,18 @@ Agent understands context and recommends drinks based on your needs:
 ### Flow 4: Merchant revenue dashboard
 
 1. Open `http://localhost:5173/merchant`
-2. Shows total revenue across all merchants
-3. Click a merchant card → per-product sales, revenue, and recent purchases
-4. Auto-refreshes every 5 seconds
+2. Shows total revenue across all merchants with **named merchants** (Coffee Provider, Soft Drink Provider, Water Provider) — each card shows Revenue label
+3. Use the **Time Range** dropdown (All Time / Last 24 Hours / Last Week / Last Month) to filter revenue
+4. Click a merchant card → per-product sales, revenue, and recent purchases
+5. Time range filter also works on individual merchant detail pages
+6. Auto-refreshes every 5 seconds
+
+### Flow 5: Transaction history
+
+1. In the chat interface, click the **Transactions** button in the left sidebar (calendar icon)
+2. Shows all completed purchases with timestamp, amount, transaction hash, and purchase ID
+3. Click **Inventory** to see purchased items with NFT previews
+4. Inventory and Transactions are mutually exclusive panels (clicking one closes the other)
 
 ---
 
@@ -146,7 +166,7 @@ Agent understands context and recommends drinks based on your needs:
 1. Agent queries Bazaar: *"what services exist?"*
 2. Bazaar queries x402: `GET /products` → gets catalog with prices
 3. Bazaar transforms to standard resource format → returns to agent
-4. Agent fetches resource → gets HTTP 402 → signs payment → facilitator settles
+4. Agent fetches resource → gets HTTP 402 → sees Payment Summary → signs payment → facilitator settles
 
 ---
 
@@ -184,17 +204,16 @@ Agent understands context and recommends drinks based on your needs:
 ## Troubleshooting
 
 | Issue | Fix |
-|---|---|---|
+|---|---|
 | `/debug/bazaar` shows empty/error | Start `x402server` first, then `mcpdiscovery`. Refresh. |
 | 402 response body is `{}` in DevTools | Normal — the x402 protocol uses headers. Body is decoded copy for readability. |
 | Payment fails with chain ID mismatch | Switch MetaMask to Base Sepolia. |
-| Payment fails with `invalid_exact_evm_signature` | Click "Test Signing" button in MetaMask panel. If `eth_signTypedData_v4` recovers to a different address than `personal_sign`, the v-fix in `signTypedData` should auto-correct it. If not, try Firefox or Rabby wallet. |
+| Payment fails with `invalid_exact_evm_signature` | The v-fix in `signTypedData` should auto-correct the MetaMask v-value bug. If not, try Firefox or Rabby wallet. |
 | Payment fails with `invalid_exact_evm_token_name_mismatch` | The `USDC_NAME` in `x402server/app.js` must match the on-chain token name. Base Sepolia Circle native USDC returns `"USDC"`. Bridged USDC (USDC.e) returns `"USD Coin"`. |
 | Payment fails after signing | Get testnet USDC from faucet.circle.com. |
 | "Facilitator error" in x402 logs | Check `https://x402.org/facilitator` is reachable. |
 | Bazaar returns 0 resources | x402 server not reachable. Start x402 first, restart Bazaar. |
 | MetaMask not detected | Install MetaMask extension, refresh page. |
-| Test signing in console | Click "Test Signing (console)" in the MetaMask panel to compare `personal_sign` and `eth_signTypedData_v4` recovery. |
 
 ---
 
@@ -205,3 +224,13 @@ cd x402server && npm test     # 14 tests
 cd ../mcpdiscovery && npm test # 11 tests
 cd ../frontend && npm test     # 31 tests
 ```
+
+## Recent UI Changes
+
+- **Payment Summary** — PaymentCard now shows a detailed summary before paying (item, price, calories, what you receive, network, asset, pay-to wallet)
+- **NFT auto-sizing** — NFT previews constrained to `max-width: 200px` (chat) / `180px` (inventory) with `object-fit: contain`
+- **Transaction history** — new Transactions sidebar panel shows timestamp, amount, TX hash, and purchase ID
+- **Merchant names** — merchants displayed as "Coffee Provider", "Soft Drink Provider", "Water Provider" instead of generic "Merchant"
+- **Revenue labels** — each merchant card shows "Revenue" label below the name
+- **Time range filter** — dropdown on merchant pages to filter by All Time / 24h / Week / Month
+- **Product icons** — each product has a contextual emoji icon (☕ for coffee, 🥤 for soda, 💧 for water)

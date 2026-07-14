@@ -17,6 +17,12 @@ function deterministicWallet(seed) {
   return "0x" + hash.slice(0, 40);
 }
 
+const MERCHANT_NAMES = {
+  coffee: "Coffee Provider",
+  softdrink: "Soft Drink Provider",
+  water: "Water Provider",
+};
+
 const MERCHANT_WALLETS = {
   coffee: process.env.MERCHANT_COFFEE || deterministicWallet("coffee"),
   softdrink: process.env.MERCHANT_SOFTDRINK || deterministicWallet("soft_drink"),
@@ -77,30 +83,40 @@ app.get("/products", (req, res) => {
 });
 
 app.get("/merchants", (req, res) => {
+  const rangeHours = parseInt(req.query.rangeHours) || 0;
+  const cutoff = rangeHours > 0 ? Date.now() - rangeHours * 3600000 : 0;
+  const filtered = cutoff > 0 ? purchases.filter(p => new Date(p.timestamp).getTime() >= cutoff) : purchases;
+
   const merchantMap = new Map();
   for (const p of products.values()) {
     const mid = p.merchant;
     if (!merchantMap.has(mid)) {
-      merchantMap.set(mid, { wallet: p.payTo, merchantId: mid, products: [], totalProducts: 0, balance: 0, balanceUSD: "$0.00", network: p.network });
+      merchantMap.set(mid, { wallet: p.payTo, merchantId: mid, name: MERCHANT_NAMES[mid] || mid, products: [], totalProducts: 0, balance: 0, balanceUSD: "$0.00", network: p.network });
     }
     const entry = merchantMap.get(mid);
     entry.products.push({ productId: p.productId, name: p.name, displayPrice: p.displayPrice, priceInCents: p.priceInCents });
     entry.totalProducts++;
   }
   const revenueByWallet = {};
-  for (const p of purchases) {
+  for (const p of filtered) {
     revenueByWallet[p.payTo] = (revenueByWallet[p.payTo] || 0) + p.priceInCents;
   }
   const merchants = Array.from(merchantMap.values()).map(m => {
     const balance = revenueByWallet[m.wallet] || 0;
     return { ...m, balance, balanceUSD: `$${(balance / 100).toFixed(2)}` };
   });
-  res.json({ merchants });
+  res.json({ merchants, rangeHours });
 });
 
 app.get("/merchant/:wallet", (req, res) => {
   const wallet = req.params.wallet;
-  const merchantPurchases = purchases.filter(p => p.payTo === wallet);
+  const rangeHours = parseInt(req.query.rangeHours) || 0;
+  const cutoff = rangeHours > 0 ? Date.now() - rangeHours * 3600000 : 0;
+
+  const allPurchases = purchases.filter(p => p.payTo === wallet);
+  const merchantPurchases = cutoff > 0
+    ? allPurchases.filter(p => new Date(p.timestamp).getTime() >= cutoff)
+    : allPurchases;
   const merchantProducts = Array.from(products.values()).filter(p => p.payTo === wallet);
   if (merchantProducts.length === 0) return res.status(404).json({ error: "Merchant not found" });
   const salesByProduct = {};
@@ -118,6 +134,7 @@ app.get("/merchant/:wallet", (req, res) => {
   const totalSales = merchantPurchases.length;
   res.json({
     wallet,
+    name: MERCHANT_NAMES[merchantProducts[0].merchant] || merchantProducts[0].merchant,
     merchantId: merchantProducts[0].merchant,
     network: DEFAULT_NETWORK,
     products: productList,
@@ -125,6 +142,7 @@ app.get("/merchant/:wallet", (req, res) => {
     totalSales,
     totalRevenueCents: totalRevenue,
     totalRevenueUSD: `$${(totalRevenue / 100).toFixed(2)}`,
+    rangeHours,
     recentPurchases: merchantPurchases.slice(-10).reverse().map(p => ({
       purchaseId: p.purchaseId, productName: p.productName, priceInCents: p.priceInCents, timestamp: p.timestamp,
     })),

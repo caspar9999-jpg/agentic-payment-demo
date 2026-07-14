@@ -6,10 +6,11 @@ function MerchantDirectory() {
   const [merchants, setMerchants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [rangeHours, setRangeHours] = useState(0);
 
-  const fetchMerchants = async () => {
+  const fetchMerchants = async (hours) => {
     try {
-      const data = await x402Client.getMerchantBalances();
+      const data = await x402Client.getMerchantBalances(hours);
       setMerchants(data || []);
       setLastUpdated(new Date());
     } catch (e) {
@@ -19,10 +20,16 @@ function MerchantDirectory() {
   };
 
   useEffect(() => {
-    fetchMerchants();
-    const interval = setInterval(fetchMerchants, 5000);
+    fetchMerchants(rangeHours);
+    const interval = setInterval(() => fetchMerchants(rangeHours), 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [rangeHours]);
+
+  const handleRangeChange = (e) => {
+    const hours = parseInt(e.target.value);
+    setRangeHours(hours);
+    setLoading(true);
+  };
 
   const totalRevenue = merchants.reduce((sum, m) => sum + (m.balance || 0), 0);
   const totalProducts = merchants.reduce((sum, m) => sum + (m.totalProducts || 0), 0);
@@ -53,6 +60,15 @@ function MerchantDirectory() {
             <span className="merchant-summary-label">Products</span>
             <span className="merchant-summary-value">{totalProducts}</span>
           </div>
+          <div className="merchant-summary-card" style={{ minWidth: "160px" }}>
+            <span className="merchant-summary-label">Time Range</span>
+            <select className="merchant-range-select" value={rangeHours} onChange={handleRangeChange}>
+              <option value="0">All Time</option>
+              <option value="24">Last 24 Hours</option>
+              <option value="168">Last Week</option>
+              <option value="720">Last Month</option>
+            </select>
+          </div>
         </div>
       </header>
 
@@ -72,7 +88,10 @@ function MerchantDirectory() {
             {merchants.map(m => (
               <Link to={`/merchant/${m.wallet}`} key={m.wallet} className="merchant-card">
                 <div className="merchant-card-header">
-                  <h2 className="merchant-card-name">Merchant</h2>
+                  <div>
+                    <h2 className="merchant-card-name">{m.name || "Merchant"}</h2>
+                    <span className="merchant-card-revenue-label">Revenue</span>
+                  </div>
                   <span className="merchant-card-balance">{m.balanceUSD}</span>
                 </div>
                 <div className="merchant-card-body">
@@ -106,10 +125,11 @@ function MerchantDetail() {
   const [merchant, setMerchant] = useState(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [rangeHours, setRangeHours] = useState(0);
 
-  const fetchMerchant = async () => {
+  const fetchMerchant = async (hours) => {
     try {
-      const data = await x402Client.getMerchant(merchantId);
+      const data = await x402Client.getMerchant(merchantId, hours);
       setMerchant(data);
       setLastUpdated(new Date());
     } catch (e) {
@@ -119,10 +139,16 @@ function MerchantDetail() {
   };
 
   useEffect(() => {
-    fetchMerchant();
-    const interval = setInterval(fetchMerchant, 5000);
+    fetchMerchant(rangeHours);
+    const interval = setInterval(() => fetchMerchant(rangeHours), 5000);
     return () => clearInterval(interval);
-  }, [merchantId]);
+  }, [merchantId, rangeHours]);
+
+  const handleRangeChange = (e) => {
+    const hours = parseInt(e.target.value);
+    setRangeHours(hours);
+    setLoading(true);
+  };
 
   return (
     <>
@@ -136,7 +162,7 @@ function MerchantDetail() {
         <div className="merchant-page-title-block">
           {merchant && (
             <>
-              <h1 className="merchant-page-title">Merchant Wallet</h1>
+              <h1 className="merchant-page-title">{merchant.name || "Merchant Wallet"}</h1>
               <p className="merchant-page-subtitle">
                 <code className="merchant-detail-wallet">{merchant.wallet}</code>
               </p>
@@ -156,6 +182,15 @@ function MerchantDetail() {
             <div className="merchant-summary-card">
               <span className="merchant-summary-label">Products</span>
               <span className="merchant-summary-value">{merchant.totalProducts}</span>
+            </div>
+            <div className="merchant-summary-card" style={{ minWidth: "160px" }}>
+              <span className="merchant-summary-label">Time Range</span>
+              <select className="merchant-range-select" value={rangeHours} onChange={handleRangeChange}>
+                <option value="0">All Time</option>
+                <option value="24">Last 24 Hours</option>
+                <option value="168">Last Week</option>
+                <option value="720">Last Month</option>
+              </select>
             </div>
           </div>
         )}

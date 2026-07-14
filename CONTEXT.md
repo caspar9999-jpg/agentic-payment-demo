@@ -28,7 +28,7 @@ _Avoid_: plain network names
 A purchasable item owned by a Merchant, discoverable via Bazaar, payable via x402. Has: id, name, description, price, priceInCents, merchantId, merchantName, payTo.
 
 **Merchant**:
-The seller of products. Identified by a wallet address (EVM hex string, 0x-prefixed). A merchant owns multiple products and receives payment via their wallet. In the demo, merchants are grouped by wallet address on the x402 server.
+The seller of products. Identified by a wallet address (EVM hex string, 0x-prefixed) and a human-readable name (`"Coffee Provider"`, `"Soft Drink Provider"`, `"Water Provider"`). A merchant owns multiple products and receives payment via their wallet. In the demo, merchants are grouped by wallet address on the x402 server. The merchant detail page supports time-range filtering of revenue/sales.
 _Avoid_: Vendor, seller, service provider
 
 **PaymentPayload**:
@@ -46,10 +46,24 @@ No session-based demo wallets. The user's wallet address IS their identity. Sett
 A remote service (e.g., `https://x402.org/facilitator`) that verifies payment payload signatures and settles USDC transfers on-chain. The x402 server delegates to it via `HTTPFacilitatorClient` (`@x402/core/server`). No in-memory wallet deduction happens on the demo server.
 
 **NFT Collectible**:
-Generated SVG awarded per purchase with product art, real tx hash, and purchase ID.
+Generated SVG awarded per purchase with product art, real tx hash, and purchase ID. Displayed in the payment success view and the Inventory panel. SVGs are auto-sized to fit their container (`max-width: 200px` in chat, `180px` in inventory).
 
 **Purchase History**:
-Tracked locally in the frontend after each successful payment. No server-side `/purchases/:sessionId` endpoint (wallet address is the canonical identity).
+Tracked locally in the frontend after each successful payment. Displayed in two panels:
+- **Inventory** — shows purchased items with NFT previews
+- **Transactions** — shows timestamp, amount, TX hash, and purchase ID per transaction
+
+**Transaction**:
+A single purchase record with: product name, amount, timestamp, settlement transaction hash, purchase ID, and optional NFT data. Viewable in the Transactions sidebar panel.
+
+**Product Icon**:
+Emoji mapping per product ID in `App.jsx` (`PRODUCT_ICONS`): espresso/latte/cappuccino → ☕, cold-brew → 🧊, coke/pepsi/sprite → 🥤, fanta → 🍊, dasani/smartwater → 💧, unknown → 📦.
+
+**Payment Summary**:
+Shown in the PaymentCard before the user clicks Pay. Includes: item name, price, calories (if applicable), what the user receives (x402 Collectible NFT), network (Base Sepolia), asset (USDC), and pay-to wallet address. An informational note explains the MetaMask flow.
+
+**Time Range Filter**:
+A dropdown on merchant pages (directory and detail) to filter revenue/sales by time window: All Time, Last 24 Hours, Last Week, Last Month. Passed as `?rangeHours=24|168|720` to the x402 server.
 
 ### Agent behavior
 
@@ -67,7 +81,7 @@ When the agent proactively recommends a product, it asks for confirmation before
 
 **x402 Payment Flow**:
 1. User clicks Buy Now → frontend does `GET /resource/:productId` → server responds **402** with `PAYMENT-REQUIRED` (includes `accepts[]` with `amount`, `asset`, `network`, `payTo`, `maxTimeoutSeconds`, `extra`)
-2. PaymentCard appears with payment details (network, amount, merchant wallet)
+2. PaymentCard appears with payment details (network, amount, merchant wallet) plus a **Payment Summary** section showing item name, price, calories, and what the user receives (NFT)
 3. User clicks Pay → (if MetaMask connected) `eth_signTypedData_v4` prompt appears with EIP-712 `TransferWithAuthorization` typed data (switches to Base Sepolia first)
 4. The signer verifies the signature client-side and auto-fixes the `v` recovery byte if needed (see Known Issues)
 5. Payment payload (V2 format with `accepted` + `payload` + optional `signature`) sent as `PAYMENT-SIGNATURE` header (base64)
@@ -81,7 +95,7 @@ When the agent proactively recommends a product, it asks for confirmation before
 - A **Merchant** may own multiple **Products** (same `payTo` wallet)
 - An **Agent** discovers **Products** via **Bazaar** `/discovery/resources`
 - An **Agent** purchases a **Product** via the **x402 Protocol** (402 → facilitator verify → facilitator settle)
-- A successful purchase produces one **SettlementResponse** (with real tx hash) and one **NFT Collectible**
+- A successful purchase produces one **SettlementResponse** (with real tx hash), one **NFT Collectible**, and one **Transaction** record
 - Wallet address IS identity — no session-based demo wallets
 
 ## Inventory
@@ -106,7 +120,8 @@ When the agent proactively recommends a product, it asks for confirmation before
 
 ```
 x402server/
-  app.js                   Express app with hardcoded products, facilitator integration
+  app.js                   Express app with hardcoded products, MERCHANT_NAMES map,
+                           facilitator integration, time range filtering (?rangeHours=)
   lib/x402facilitator.js   Dead code — HTTPFacilitatorClient wrapper (not imported)
   test/x402server.test.js  Backend tests (14 tests: 402 flow, facilitator, V2 payload)
 
@@ -115,21 +130,22 @@ mcpdiscovery/
   test/bazaar.test.js      Bazaar tests (11 tests: resources, search, caching, errors)
 
 frontend/src/
-  App.jsx            Chat UI orchestrator + MetaMask panel + sidebar
-  App.css            All styles
+  App.jsx            Chat UI orchestrator + MetaMask panel + sidebar + Transaction panel
+  App.css            All styles (payment summary, tx items, merchant range select, NFT sizing)
   sodaEngine.js      x402Client (V2 payloads) + Bazaar client + agent engine
   BazaarDemoPage.jsx Bazaar discovery data flow trace (4-step pipeline)
-  MerchantPage.jsx   Merchant directory + detail pages
+  MerchantPage.jsx   Merchant directory + detail pages (time range filter, named merchants)
   metamask.js        MetaMask connect/sign utilities
   main.jsx           Entry point with BrowserRouter routes
 
 RUNBOOK.md                Step-by-step demo runbook
+```
 
 ## Servers
 
 | Server | Port | Endpoints |
 |---|---|---|
-| x402 | 3002 | `/resource/:id` (protected, 402 flow), `/products`, `/merchants`, `/merchant/:wallet` |
+| x402 | 3002 | `/resource/:id` (protected, 402 flow), `/products`, `/merchants[?rangeHours=]`, `/merchant/:wallet[?rangeHours=]` |
 | Bazaar | 3001 | `/discovery/resources`, `/discovery/resources/search?q=` |
 | Vite | 5173 | Frontend dev server with proxy to both backends |
 
@@ -140,8 +156,8 @@ Start order: x402 → Bazaar → frontend.
 | Path | Page |
 |---|---|
 | `/` | Chat interface |
-| `/merchant` | Merchant directory (revenue dashboard) |
-| `/merchant/:walletAddress` | Individual merchant detail (sales, revenue, purchases) |
+| `/merchant` | Merchant directory (revenue dashboard, time range filter) |
+| `/merchant/:walletAddress` | Individual merchant detail (sales, revenue, purchases, time range filter) |
 | `/debug/bazaar` | Bazaar discovery data flow trace (demo-only, hidden from users) |
 
 ## Configuration
